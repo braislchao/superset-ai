@@ -151,7 +151,7 @@ class SupersetAuthManager:
             # Try session-based authentication first (Superset 6.x+)
             return await self._authenticate_session_based()
         except Exception as e:
-            logger.debug(f"Session-based auth failed, trying JWT: {e}")
+            logger.debug("Session-based auth failed, trying JWT: %s", e)
             # Fall back to JWT authentication
             return await self._authenticate_jwt()
 
@@ -218,7 +218,7 @@ class SupersetAuthManager:
             me_data = me_response.json()
             result = me_data.get("result", {})
             if not result.get("is_anonymous", True):
-                logger.info(f"Session-based auth successful for user: {result.get('username')}")
+                logger.info("Session-based auth successful for user: %s", result.get('username'))
                 # Update cookies again after verification
                 for name, value in self._root_client.cookies.items():
                     self._session_cookies[name] = value

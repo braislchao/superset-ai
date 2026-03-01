@@ -71,11 +71,11 @@ class SupersetAgent:
             messages = list(state.get("messages", []))
             
             # Debug: log message structure
-            logger.debug(f"agent_node called with {len(messages)} messages")
+            logger.debug("agent_node called with %d messages", len(messages))
             for i, m in enumerate(messages):
                 msg_type = type(m).__name__
                 has_tools = hasattr(m, "tool_calls") and m.tool_calls
-                logger.debug(f"  [{i}] {msg_type}, has_tool_calls={has_tools}")
+                logger.debug("  [%d] %s, has_tool_calls=%s", i, msg_type, has_tools)
             
             # Check if system message already exists
             has_system = messages and isinstance(messages[0], SystemMessage)
@@ -104,11 +104,11 @@ class SupersetAgent:
                 result_messages = []
             
             # Debug: log final messages being sent to LLM
-            logger.debug(f"Sending {len(messages)} messages to LLM")
+            logger.debug("Sending %d messages to LLM", len(messages))
             for i, m in enumerate(messages):
                 msg_type = type(m).__name__
                 has_tools = hasattr(m, "tool_calls") and m.tool_calls
-                logger.debug(f"  [{i}] {msg_type}, has_tool_calls={has_tools}")
+                logger.debug("  [%d] %s, has_tool_calls=%s", i, msg_type, has_tools)
             
             # Invoke LLM
             response = llm_with_tools.invoke(messages)
@@ -175,9 +175,9 @@ class SupersetAgent:
                 {"id": db.id, "database_name": db.database_name, "backend": db.backend}
                 for db in databases
             ]
-            logger.info(f"Discovered {len(databases)} database(s)")
+            logger.info("Discovered %d database(s)", len(databases))
         except Exception as e:
-            logger.warning(f"Failed to pre-discover databases: {e}")
+            logger.warning("Failed to pre-discover databases: %s", e)
 
     async def close(self) -> None:
         """Close connections."""
@@ -246,8 +246,8 @@ class SupersetAgent:
             
         except Exception as e:
             import traceback
-            logger.error(f"Agent error: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error("Agent error: %s", e)
+            logger.error("Traceback: %s", traceback.format_exc())
             error_msg = f"An error occurred: {str(e)}"
             self.session.messages.append({
                 "role": "assistant",

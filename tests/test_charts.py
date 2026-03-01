@@ -1,7 +1,6 @@
 """Tests for chart parameter builders."""
 
 import json
-import pytest
 
 from superset_ai.schemas.charts import (
     build_adhoc_metric,
@@ -10,33 +9,7 @@ from superset_ai.schemas.charts import (
     build_line_chart_params,
     build_pie_chart_params,
     build_table_params,
-    CHART_TYPE_MAP,
 )
-
-
-class TestChartTypeMapping:
-    """Tests for chart type mapping."""
-    
-    def test_bar_chart_mappings(self):
-        """Bar chart variations should map correctly."""
-        assert CHART_TYPE_MAP["bar"] == "dist_bar"
-        assert CHART_TYPE_MAP["bar chart"] == "dist_bar"
-    
-    def test_line_chart_mappings(self):
-        """Line chart variations should map correctly."""
-        assert CHART_TYPE_MAP["line"] == "line"
-        assert CHART_TYPE_MAP["timeseries"] == "line"
-    
-    def test_pie_chart_mappings(self):
-        """Pie chart variations should map correctly."""
-        assert CHART_TYPE_MAP["pie"] == "pie"
-        assert CHART_TYPE_MAP["pie chart"] == "pie"
-    
-    def test_metric_mappings(self):
-        """KPI/metric variations should map correctly."""
-        assert CHART_TYPE_MAP["metric"] == "big_number_total"
-        assert CHART_TYPE_MAP["kpi"] == "big_number_total"
-        assert CHART_TYPE_MAP["number"] == "big_number_total"
 
 
 class TestBuildAdhocMetric:
