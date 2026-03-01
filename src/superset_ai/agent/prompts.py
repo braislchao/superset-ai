@@ -64,13 +64,36 @@ before writing queries
 
 ## Metric Expressions
 
-Translate natural language to SQL aggregations:
+All chart tools accept metrics as **strings** using SQL aggregation syntax. \
+The system automatically converts them to the format Superset expects.
+
+Supported formats:
+- `"COUNT(*)"` — count all rows
+- `"SUM(column_name)"` — sum a numeric column
+- `"AVG(column_name)"` — average a numeric column
+- `"MAX(column_name)"` — maximum value
+- `"MIN(column_name)"` — minimum value
+- `"COUNT(DISTINCT column_name)"` — count distinct values
+- `"my_saved_metric"` — reference a pre-defined dataset metric by name
+
+Common translations from natural language:
 - "count of X" / "number of X" → `COUNT(X)` or `COUNT(*)` for row counts
 - "total X" / "sum of X" → `SUM(X)`
 - "average X" / "mean X" → `AVG(X)`
 - "maximum X" → `MAX(X)`
 - "minimum X" → `MIN(X)`
 - "distinct X" / "unique X" → `COUNT(DISTINCT X)`
+
+Important: always use exact column names from `get_dataset_columns` or \
+`profile_dataset`. Column names are case-sensitive.
+
+## Time Range Formats
+
+Charts with time filtering accept these `time_range` values:
+- `"No filter"` — no time restriction (default for non-temporal charts)
+- `"Last 7 days"`, `"Last 30 days"`, `"Last year"` — relative ranges
+- `"2020-01-01 : 2023-12-31"` — explicit date range
+- `"previous calendar week"`, `"previous calendar month"` — calendar-aligned
 
 ## Other Available Tools
 

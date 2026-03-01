@@ -218,13 +218,22 @@ async def create_bar_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a bar chart visualization.
+    Create a bar chart (dist_bar) for comparing categories.
+
+    Best for: comparing values across categories (e.g., revenue by region).
+    Not ideal for: time-series data (use create_line_chart or
+    create_timeseries_bar_chart instead), or part-of-whole with few
+    categories (use create_pie_chart).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metrics: List of metrics (e.g., ["COUNT(*)", "SUM(amount)"])
-        dimensions: List of dimension columns to group by
+        metrics: Aggregation expressions. Use SQL syntax:
+            "COUNT(*)", "SUM(column)", "AVG(column)", "MAX(column)",
+            "MIN(column)", "COUNT(DISTINCT column)".
+            Or a pre-defined metric name from the dataset.
+        dimensions: Columns to group by (x-axis categories). Keep to
+            1-2 dimensions; too many creates unreadable charts.
         time_range: Time filter (e.g., "Last 7 days", "No filter")
 
     Returns the created chart information with ID and URL.
@@ -248,16 +257,24 @@ async def create_line_chart(
     time_range: str = "Last 30 days",
 ) -> dict[str, Any]:
     """
-    Create a line/timeseries chart.
+    Create a line chart for trends over time.
+
+    Best for: showing how a metric changes over a continuous time axis.
+    Requires: a time/date column in the dataset (is_dttm=True).
+    Not ideal for: categorical comparisons (use create_bar_chart).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metrics: List of metrics to plot
-        time_column: Column to use for x-axis time
-        dimensions: Optional grouping columns for multiple lines
-        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
-        time_range: Time filter
+        metrics: Aggregation expressions (e.g., ["AVG(price)", "SUM(sales)"])
+        time_column: Name of the datetime column for the x-axis. Must be
+            a column with is_dttm=True from the dataset schema.
+        dimensions: Optional grouping columns to create multiple lines
+            (one line per unique value). Keep cardinality low (<10).
+        time_grain: Time granularity — P1D (daily), P1W (weekly),
+            P1M (monthly), P1Y (yearly), PT1H (hourly), PT5M (5-minute)
+        time_range: Time filter (e.g., "Last 30 days", "Last year",
+            "2020-01-01 : 2023-12-31", "No filter")
 
     Returns the created chart information.
     """
@@ -279,13 +296,18 @@ async def create_pie_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a pie chart visualization.
+    Create a pie chart for part-of-whole comparisons.
+
+    Best for: showing proportions when there are 7 or fewer categories.
+    Not ideal for: many categories (use create_bar_chart or
+    create_treemap_chart instead), or precise value comparisons.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: Single metric for slice sizes
-        dimension: Column for pie slices
+        metric: Single aggregation expression for slice sizes
+            (e.g., "SUM(revenue)", "COUNT(*)")
+        dimension: Single column for pie slices (the categories)
         time_range: Time filter
 
     Returns the created chart information.
@@ -308,15 +330,19 @@ async def create_table_chart(
     row_limit: int = 1000,
 ) -> dict[str, Any]:
     """
-    Create a table visualization.
+    Create a table visualization for raw or aggregated data.
+
+    Two modes:
+    - Raw data: pass columns only (no metrics/dimensions) to show rows as-is.
+    - Aggregated: pass both metrics and dimensions for a GROUP BY table.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        columns: Columns to display (for raw data)
-        metrics: Optional metrics for aggregated table
-        dimensions: Optional grouping for aggregated table
-        row_limit: Maximum rows to show
+        columns: Columns to display (used for raw data mode)
+        metrics: Optional aggregation expressions for aggregated table
+        dimensions: Optional grouping columns for aggregated table
+        row_limit: Maximum rows to show (default 1000)
 
     Returns the created chart information.
     """
@@ -336,12 +362,15 @@ async def create_metric_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a big number/KPI metric visualization.
+    Create a big number/KPI metric visualization showing a single value.
+
+    Best for: headline KPIs (total revenue, user count, etc.).
+    For a KPI with a sparkline trendline, use create_big_number_trendline_chart.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: The metric to display (e.g., "COUNT(*)", "SUM(revenue)")
+        metric: Single aggregation expression (e.g., "COUNT(*)", "SUM(revenue)")
         time_range: Time filter
 
     Returns the created chart information.
@@ -366,16 +395,20 @@ async def create_area_chart(
     stacked: bool = True,
 ) -> dict[str, Any]:
     """
-    Create an area chart (filled line chart).
+    Create an area chart (filled line chart) for trends over time.
+
+    Best for: showing cumulative trends or stacked composition over time.
+    Requires: a time/date column (is_dttm=True).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metrics: List of metrics to plot
-        time_column: Column to use for x-axis time
+        metrics: Aggregation expressions (e.g., ["SUM(sales)"])
+        time_column: Datetime column for x-axis (must have is_dttm=True)
         dimensions: Optional grouping columns for stacked areas
-        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
-        time_range: Time filter
+        time_grain: Time granularity — P1D (daily), P1W (weekly),
+            P1M (monthly), P1Y (yearly)
+        time_range: Time filter (e.g., "Last 30 days", "No filter")
         stacked: Whether to stack the areas (default True)
 
     Returns the created chart information.
@@ -401,15 +434,15 @@ async def create_big_number_trendline_chart(
     """
     Create a big number KPI with a trendline / sparkline.
 
-    Unlike the plain big number chart, this variant requires a time column
-    and renders a small trend line below the headline metric.
+    Unlike the plain big number chart, this requires a time column
+    and renders a small trend line below the headline metric value.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: The metric to display (e.g., "COUNT(*)", "SUM(revenue)")
-        time_column: Time column for the trendline
-        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
+        metric: Single aggregation expression (e.g., "COUNT(*)", "SUM(revenue)")
+        time_column: Datetime column for the trendline (must have is_dttm=True)
+        time_grain: Time granularity — P1D (daily), P1W (weekly), P1M (monthly)
         time_range: Time filter
 
     Returns the created chart information.
@@ -435,17 +468,19 @@ async def create_timeseries_bar_chart(
     stacked: bool = False,
 ) -> dict[str, Any]:
     """
-    Create a timeseries bar chart (ECharts).
+    Create a timeseries bar chart (ECharts) for bars over time.
 
-    Like a regular bar chart but plotted over a time axis. Supports stacking.
+    Like a regular bar chart but with a time axis. Use this instead of
+    create_bar_chart when the x-axis should be temporal.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metrics: List of metrics to plot
-        time_column: Time column for the x-axis
+        metrics: Aggregation expressions (e.g., ["SUM(sales)"])
+        time_column: Datetime column for x-axis (must have is_dttm=True)
         dimensions: Optional grouping columns for stacked bars
-        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
+        time_grain: Time granularity — P1D (daily), P1W (weekly),
+            P1M (monthly), P1Y (yearly)
         time_range: Time filter
         stacked: Whether to stack the bars (default False)
 
@@ -473,17 +508,19 @@ async def create_bubble_chart(
     max_bubble_size: int = 25,
 ) -> dict[str, Any]:
     """
-    Create a bubble chart visualization.
+    Create a bubble chart for 3-variable correlation analysis.
 
-    Three metrics are mapped to x-position, y-position, and bubble size.
+    Each bubble represents a data point with x-position, y-position,
+    and size all driven by different metrics. Requires 3 numeric measures
+    and a categorical column for grouping.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        x_metric: Metric for x-axis position
-        y_metric: Metric for y-axis position
-        size_metric: Metric for bubble size
-        series_column: Column for colouring / grouping bubbles
+        x_metric: Aggregation for x-axis (e.g., "AVG(income)")
+        y_metric: Aggregation for y-axis (e.g., "AVG(life_expectancy)")
+        size_metric: Aggregation for bubble size (e.g., "SUM(population)")
+        series_column: Categorical column for colouring / grouping bubbles
         entity_column: Column for bubble labels (defaults to series_column)
         time_range: Time filter
         max_bubble_size: Maximum bubble diameter in pixels
@@ -510,17 +547,18 @@ async def create_funnel_chart(
     sort_by_metric: bool = True,
 ) -> dict[str, Any]:
     """
-    Create a funnel chart visualization.
+    Create a funnel chart for sequential/pipeline stage data.
 
-    Funnels show sequential stages with decreasing values.
+    Best for: conversion funnels, sales pipelines, or any data with
+    sequential stages and decreasing values.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: Single metric for funnel stage values
-        dimension: Column representing funnel stages
+        metric: Single aggregation for funnel stage values (e.g., "COUNT(*)")
+        dimension: Column representing the funnel stages
         time_range: Time filter
-        sort_by_metric: Whether to sort stages by metric value
+        sort_by_metric: Whether to sort stages by metric value (default True)
 
     Returns the created chart information.
     """
@@ -543,16 +581,17 @@ async def create_gauge_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a gauge / speedometer chart.
+    Create a gauge / speedometer chart for a single metric on a scale.
 
-    Displays a single metric as a position on an arc between min and max.
+    Best for: showing a single metric relative to a known range
+    (e.g., completion percentage, utilization rate).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: The metric to display
-        min_val: Minimum value on the gauge scale
-        max_val: Maximum value on the gauge scale
+        metric: Single aggregation expression (e.g., "AVG(score)")
+        min_val: Minimum value on the gauge scale (default 0)
+        max_val: Maximum value on the gauge scale (default 100)
         time_range: Time filter
 
     Returns the created chart information.
@@ -574,16 +613,18 @@ async def create_treemap_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a treemap visualization.
+    Create a treemap for hierarchical part-of-whole data.
 
-    Treemaps display hierarchical data as nested rectangles whose area
-    is proportional to the metric value.
+    Best for: showing proportions with many categories (>7) or
+    hierarchical dimensions (e.g., continent > country > city).
+    Alternative to pie charts when cardinality is too high.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: Metric for rectangle area sizing
-        dimensions: Dimension columns for hierarchy levels
+        metric: Single aggregation for rectangle area (e.g., "SUM(revenue)")
+        dimensions: Dimension columns for hierarchy levels.
+            Order matters: first is the outermost grouping.
         time_range: Time filter
 
     Returns the created chart information.
@@ -607,16 +648,19 @@ async def create_histogram_chart(
     time_range: str = "No filter",
 ) -> dict[str, Any]:
     """
-    Create a histogram visualization.
+    Create a histogram for value distribution analysis.
 
-    Histograms show the distribution of a single numeric column.
+    Best for: understanding how a single numeric column is distributed
+    (e.g., age distribution, price distribution). Does NOT take a metric —
+    pass a raw numeric column name instead.
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        column: Numeric column whose distribution to plot
+        column: Numeric column whose distribution to plot (raw column
+            name, NOT an aggregation expression)
         dimensions: Optional grouping for overlaid histograms
-        num_bins: Number of bins
+        num_bins: Number of bins (default 10)
         normalized: Whether to normalize the histogram
         time_range: Time filter
 
@@ -641,18 +685,19 @@ async def create_box_plot_chart(
     whisker_options: str = "Tukey",
 ) -> dict[str, Any]:
     """
-    Create a box plot visualization.
+    Create a box plot for comparing statistical distributions across groups.
 
-    Box plots display the statistical distribution (median, quartiles,
-    outliers) of one or more metrics, grouped by dimensions.
+    Best for: comparing distributions of a metric across categories
+    (e.g., salary distribution by department).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metrics: Metric expressions to plot
-        dimensions: Dimension columns for grouping
+        metrics: Aggregation expressions to plot (e.g., ["AVG(salary)"])
+        dimensions: Categorical columns for grouping along the x-axis
         time_range: Time filter
-        whisker_options: Whisker calculation method (Tukey, Min/max, etc.)
+        whisker_options: Whisker method — "Tukey" (default),
+            "Min/max (no outliers)", "2/98 percentiles", "9/91 percentiles"
 
     Returns the created chart information.
     """
@@ -678,19 +723,19 @@ async def create_heatmap_chart(
     show_values: bool = False,
 ) -> dict[str, Any]:
     """
-    Create a heatmap visualization.
+    Create a heatmap for dense 2D grid comparisons.
 
-    Heatmaps display a 2D grid coloured by a metric value at each
-    (x, y) intersection.
+    Best for: showing patterns across two categorical dimensions with
+    colour intensity driven by a metric (e.g., sales by weekday x hour).
 
     Args:
         title: Chart title
         dataset_id: ID of the dataset to use
-        metric: Metric for cell colour intensity
-        x_column: Column for x-axis
-        y_column: Column for y-axis
+        metric: Single aggregation for cell colour intensity (e.g., "COUNT(*)")
+        x_column: Categorical column for x-axis
+        y_column: Categorical column for y-axis
         time_range: Time filter
-        linear_color_scheme: Colour scheme name
+        linear_color_scheme: Colour scheme (default "blue_white_yellow")
         normalize_across: Normalisation axis (None, "heatmap", "x", "y")
         show_values: Whether to display values in cells
 
