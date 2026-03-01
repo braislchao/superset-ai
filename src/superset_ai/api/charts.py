@@ -23,6 +23,7 @@ from superset_ai.schemas.charts import (
     build_histogram_params,
     build_line_chart_params,
     build_pie_chart_params,
+    build_query_context,
     build_table_params,
     build_timeseries_bar_chart_params,
     build_treemap_params,
@@ -86,6 +87,10 @@ class ChartService:
         Create a new chart.
         
         POST /api/v1/chart/
+
+        After creation, updates the stored ``query_context`` with the
+        newly assigned ``slice_id`` so that dashboard cache warm-up and
+        rendering work correctly.
         """
         payload = spec.model_dump(exclude_none=True)
         
@@ -94,6 +99,21 @@ class ChartService:
         
         chart_id = response.get("id")
         if chart_id:
+            # Patch query_context with the real slice_id now that we know it.
+            if spec.query_context:
+                try:
+                    qc = json.loads(spec.query_context)
+                    qc.setdefault("form_data", {})["slice_id"] = chart_id
+                    await self.client.put(
+                        f"/chart/{chart_id}",
+                        json={"query_context": json.dumps(qc)},
+                    )
+                except (json.JSONDecodeError, Exception):
+                    logger.debug(
+                        "Failed to update query_context with slice_id for chart %d",
+                        chart_id,
+                        exc_info=True,
+                    )
             return await self.get_chart(chart_id)
         
         result = response.get("result", response)
@@ -194,11 +214,11 @@ class ChartService:
             time_range=time_range,
         )
         
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="dist_bar",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
         
@@ -238,11 +258,11 @@ class ChartService:
             time_range=time_range,
         )
         
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="line",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
         
@@ -276,11 +296,11 @@ class ChartService:
             time_range=time_range,
         )
         
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="pie",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
         
@@ -320,11 +340,11 @@ class ChartService:
             row_limit=row_limit,
         )
         
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="table",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
         
@@ -358,11 +378,11 @@ class ChartService:
             time_range=time_range,
         )
         
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="big_number_total",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
         
@@ -408,11 +428,11 @@ class ChartService:
             stacked=stacked,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="area",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -448,11 +468,11 @@ class ChartService:
             time_range=time_range,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="big_number",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -494,11 +514,11 @@ class ChartService:
             stacked=stacked,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="echarts_timeseries_bar",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -543,11 +563,11 @@ class ChartService:
             max_bubble_size=max_bubble_size,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="bubble",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -583,11 +603,11 @@ class ChartService:
             sort_by_metric=sort_by_metric,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="funnel",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -623,11 +643,11 @@ class ChartService:
             time_range=time_range,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="gauge_chart",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -660,11 +680,11 @@ class ChartService:
             time_range=time_range,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="treemap_v2",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -703,11 +723,11 @@ class ChartService:
             normalized=normalized,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="histogram",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -746,11 +766,11 @@ class ChartService:
             whisker_options=whisker_options,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="box_plot",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -795,11 +815,11 @@ class ChartService:
             show_values=show_values,
         )
 
-        spec = ChartCreate(
-            slice_name=title,
+        spec = self._build_spec(
+            title=title,
             viz_type="heatmap",
             datasource_id=datasource_id,
-            params=params.to_json(),
+            params=params,
             description=description,
         )
 
@@ -808,6 +828,32 @@ class ChartService:
     # =========================================================================
     # Helper methods
     # =========================================================================
+
+    def _build_spec(
+        self,
+        *,
+        title: str,
+        viz_type: str,
+        datasource_id: int,
+        params: ChartParams,
+        description: str | None = None,
+    ) -> ChartCreate:
+        """Build a ``ChartCreate`` spec with auto-generated ``query_context``.
+
+        Every high-level ``create_*`` method should use this helper so that
+        the resulting chart includes a stored ``query_context`` — required by
+        Superset dashboards for cache warm-up and rendering.
+        """
+        return ChartCreate(
+            slice_name=title,
+            viz_type=viz_type,
+            datasource_id=datasource_id,
+            params=params.to_json(),
+            query_context=build_query_context(
+                params, datasource_id=datasource_id,
+            ),
+            description=description,
+        )
 
     def _normalize_metrics(self, metrics: list[str]) -> list[str | dict[str, Any]]:
         """

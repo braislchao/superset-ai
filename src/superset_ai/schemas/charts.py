@@ -119,6 +119,7 @@ class ChartParams(BaseSchema):
     
     # Metrics and dimensions
     metrics: list[str | dict[str, Any]] = Field(default_factory=list)
+    metric: str | dict[str, Any] | None = None  # Singular metric (heatmap, etc.)
     groupby: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=list)
     
@@ -193,8 +194,8 @@ class ChartParams(BaseSchema):
     # Box plot specific
     whisker_options: str | None = None  # "Tukey", "Min/max (no outliers)", "2/98 percentiles", "9/91 percentiles"
 
-    # Heatmap specific
-    all_columns_x: str | None = None
+    # Heatmap / histogram specific
+    all_columns_x: str | list[str] | None = None  # str for heatmap, list for histogram
     all_columns_y: str | None = None
     linear_color_scheme: str | None = None
     xscale_interval: int | None = None
@@ -662,6 +663,7 @@ def build_histogram_params(
         viz_type="histogram",
         datasource=f"{datasource_id}__table",
         all_columns=[column],
+        all_columns_x=[column],  # Histogram viz plugin reads all_columns_x
         groupby=groupby or [],
         link_length=link_length,
         time_range=time_range,
@@ -732,6 +734,7 @@ def build_heatmap_params(
     return ChartParams(
         viz_type="heatmap",
         datasource=f"{datasource_id}__table",
+        metric=metric,
         metrics=[metric],
         all_columns_x=x_column,
         all_columns_y=y_column,
@@ -755,3 +758,127 @@ def _metric_to_dict(metric: str | dict[str, Any]) -> dict[str, Any]:
         return metric
     # Treat as a pre-defined metric name reference
     return {"label": metric, "expressionType": "SIMPLE", "column": {"column_name": metric}, "aggregate": "SUM"}
+
+
+# =============================================================================
+# Query Context Builder
+# =============================================================================
+
+
+def build_query_context(
+    params: ChartParams,
+    *,
+    datasource_id: int,
+    slice_id: int | None = None,
+) -> str:
+    """Build a ``query_context`` JSON string from chart params.
+
+    Superset stores ``query_context`` alongside chart ``params`` so that
+    dashboards can render charts without the frontend having to derive the
+    query from params.  Charts created purely via the REST API often lack
+    this field, which causes "query context does not exist" errors on
+    dashboards and warm-up cache calls.
+
+    This function mirrors the logic that the Superset frontend executes
+    when a user clicks *Run* in the Explore view.
+
+    Args:
+        params: The chart params (already built by one of the ``build_*``
+            helpers).
+        datasource_id: Numeric dataset / datasource ID.
+        slice_id: Optional chart ID (set after first creation when
+            updating the chart).
+
+    Returns:
+        JSON string ready to be stored in ``ChartCreate.query_context``
+        or passed to ``PUT /api/v1/chart/{id}``.
+    """
+    params_dict = params.model_dump(exclude_none=True)
+
+    # --- Determine query columns / metrics ----------------------------------
+    # Most chart types send metrics + groupby columns.
+    # Some (table raw mode, histogram) send raw columns instead.
+    query_metrics: list[Any] = list(params_dict.get("metrics", []))
+    query_columns: list[Any] = list(params_dict.get("groupby", []))
+
+    viz = params.viz_type
+
+    # Histogram: raw column fetch, no metrics
+    if viz == "histogram":
+        query_columns = list(params_dict.get("all_columns", []))
+        query_metrics = []
+
+    # Table (raw mode): uses all_columns, no metrics
+    elif viz == "table" and not query_metrics:
+        query_columns = list(params_dict.get("all_columns", []))
+        query_metrics = []
+
+    # Bubble chart: metrics live in x / y / size fields
+    elif viz == "bubble":
+        query_metrics = [
+            m
+            for m in (params_dict.get("x"), params_dict.get("y"), params_dict.get("size"))
+            if m is not None
+        ]
+        query_columns = [
+            c
+            for c in (params_dict.get("series"), params_dict.get("entity"))
+            if c is not None
+        ]
+
+    # Heatmap: groupby is all_columns_x + all_columns_y
+    elif viz == "heatmap":
+        query_columns = [
+            c
+            for c in (params_dict.get("all_columns_x"), params_dict.get("all_columns_y"))
+            if c is not None
+        ]
+
+    # --- Orderby --------------------------------------------------------------
+    orderby: list[Any] = []
+    if params.order_desc is not None and params.timeseries_limit_metric is not None:
+        orderby = [[params.timeseries_limit_metric, not params.order_desc]]
+
+    # --- Build query dict -----------------------------------------------------
+    query: dict[str, Any] = {
+        "time_range": params.time_range,
+        "filters": [],
+        "extras": {"having": "", "where": ""},
+        "applied_time_extras": {},
+        "columns": query_columns,
+        "metrics": query_metrics,
+        "orderby": orderby,
+        "annotation_layers": [],
+        "row_limit": params.row_limit,
+        "series_limit": 0,
+        "order_desc": params.order_desc if params.order_desc is not None else True,
+        "url_params": {},
+        "custom_params": {},
+        "custom_form_data": {},
+    }
+
+    if params.granularity_sqla:
+        query["granularity"] = params.granularity_sqla
+
+    if params.time_grain_sqla:
+        query["extras"]["time_grain_sqla"] = params.time_grain_sqla
+
+    # --- Build form_data (mirror of params with rendering hints) ---------------
+    form_data: dict[str, Any] = dict(params_dict)
+    form_data.setdefault("force", False)
+    form_data["result_format"] = "json"
+    form_data["result_type"] = "full"
+    if slice_id is not None:
+        form_data["slice_id"] = slice_id
+
+    # --- Assemble top-level query_context -------------------------------------
+    query_context: dict[str, Any] = {
+        "datasource": {"id": datasource_id, "type": "table"},
+        "force": False,
+        "queries": [query],
+        "form_data": form_data,
+        "result_format": "json",
+        "result_type": "full",
+    }
+
+    return json.dumps(query_context)

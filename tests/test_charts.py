@@ -16,6 +16,7 @@ from superset_ai.schemas.charts import (
     build_histogram_params,
     build_line_chart_params,
     build_pie_chart_params,
+    build_query_context,
     build_table_params,
     build_timeseries_bar_chart_params,
     build_treemap_params,
@@ -446,6 +447,15 @@ class TestBuildHistogramParams:
 
         assert params.groupby == ["gender"]
 
+    def test_sets_all_columns_x(self):
+        """Should set all_columns_x for the histogram viz plugin."""
+        params = build_histogram_params(
+            datasource_id=8,
+            column="price",
+        )
+
+        assert params.all_columns_x == ["price"]
+
 
 class TestBuildBoxPlotParams:
     """Tests for box plot builder."""
@@ -510,3 +520,226 @@ class TestBuildHeatmapParams:
         assert params.linear_color_scheme == "fire"
         assert params.normalize_across == "x"
         assert params.show_values is True
+
+    def test_sets_singular_metric_field(self):
+        """Should set metric (singular) for the heatmap viz plugin."""
+        params = build_heatmap_params(
+            datasource_id=10,
+            metric="COUNT(*)",
+            x_column="day",
+            y_column="hour",
+        )
+
+        assert params.metric == "COUNT(*)"
+        assert params.metrics == ["COUNT(*)"]
+
+
+# =============================================================================
+# Tests for query context builder
+# =============================================================================
+
+
+class TestBuildQueryContext:
+    """Tests for query_context builder."""
+
+    def test_returns_valid_json(self):
+        """Should return a parseable JSON string."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc_str = build_query_context(params, datasource_id=1)
+        qc = json.loads(qc_str)
+        assert isinstance(qc, dict)
+
+    def test_contains_required_top_level_keys(self):
+        """Should contain datasource, queries, form_data, result_format, result_type."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+
+        assert qc["datasource"] == {"id": 1, "type": "table"}
+        assert qc["force"] is False
+        assert "queries" in qc
+        assert len(qc["queries"]) == 1
+        assert "form_data" in qc
+        assert qc["result_format"] == "json"
+        assert qc["result_type"] == "full"
+
+    def test_bar_chart_query_has_metrics_and_columns(self):
+        """Bar chart query should include metrics and groupby columns."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region", "status"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert query["metrics"] == ["COUNT(*)"]
+        assert query["columns"] == ["region", "status"]
+        assert query["time_range"] == "No filter"
+        assert query["row_limit"] == 1000
+
+    def test_pie_chart_query(self):
+        """Pie chart query should include metric and groupby."""
+        metric = build_adhoc_metric("revenue", "SUM")
+        params = build_pie_chart_params(
+            datasource_id=2,
+            metric=metric,
+            groupby="category",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=2))
+        query = qc["queries"][0]
+
+        assert query["metrics"] == [metric]
+        assert query["columns"] == ["category"]
+
+    def test_histogram_query_uses_raw_columns(self):
+        """Histogram query should fetch raw columns with no metrics."""
+        params = build_histogram_params(
+            datasource_id=3,
+            column="price",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=3))
+        query = qc["queries"][0]
+
+        assert query["columns"] == ["price"]
+        assert query["metrics"] == []
+
+    def test_table_raw_query(self):
+        """Raw table query should use all_columns."""
+        params = build_table_params(
+            datasource_id=4,
+            columns=["name", "email"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=4))
+        query = qc["queries"][0]
+
+        assert query["columns"] == ["name", "email"]
+        assert query["metrics"] == []
+
+    def test_table_aggregated_query(self):
+        """Aggregated table query should use metrics and groupby."""
+        params = build_table_params(
+            datasource_id=4,
+            columns=["status"],
+            metrics=["COUNT(*)"],
+            groupby=["status"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=4))
+        query = qc["queries"][0]
+
+        assert query["metrics"] == ["COUNT(*)"]
+        assert query["columns"] == ["status"]
+
+    def test_bubble_chart_query(self):
+        """Bubble chart query should use x/y/size as metrics."""
+        params = build_bubble_chart_params(
+            datasource_id=5,
+            x_metric="SUM(a)",
+            y_metric="SUM(b)",
+            size_metric="SUM(c)",
+            series_column="region",
+            entity_column="country",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=5))
+        query = qc["queries"][0]
+
+        assert len(query["metrics"]) == 3
+        assert query["columns"] == ["region", "country"]
+
+    def test_heatmap_query(self):
+        """Heatmap query should use all_columns_x/y as columns."""
+        params = build_heatmap_params(
+            datasource_id=6,
+            metric="COUNT(*)",
+            x_column="day",
+            y_column="hour",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=6))
+        query = qc["queries"][0]
+
+        assert query["columns"] == ["day", "hour"]
+        assert query["metrics"] == ["COUNT(*)"]
+
+    def test_orderby_from_timeseries_limit_metric(self):
+        """Should include orderby when order_desc and timeseries_limit_metric are set."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        # Bar chart sets order_desc=True and timeseries_limit_metric=metrics[0]
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "COUNT(*)"
+        assert query["orderby"][0][1] is False  # not params.order_desc -> not True = False
+
+    def test_no_orderby_when_order_desc_not_set(self):
+        """Should not include orderby when order_desc is None."""
+        params = build_big_number_params(
+            datasource_id=1,
+            metric="COUNT(*)",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert query["orderby"] == []
+
+    def test_includes_granularity_for_time_charts(self):
+        """Should include granularity and time_grain for timeseries charts."""
+        params = build_line_chart_params(
+            datasource_id=1,
+            metrics=["SUM(sales)"],
+            time_column="order_date",
+            time_grain="P1W",
+            time_range="Last 90 days",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert query["granularity"] == "order_date"
+        assert query["extras"]["time_grain_sqla"] == "P1W"
+        assert query["time_range"] == "Last 90 days"
+
+    def test_form_data_mirrors_params(self):
+        """form_data should contain the chart params."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        fd = qc["form_data"]
+
+        assert fd["viz_type"] == "dist_bar"
+        assert fd["datasource"] == "1__table"
+        assert fd["result_format"] == "json"
+        assert fd["result_type"] == "full"
+
+    def test_slice_id_in_form_data(self):
+        """Should include slice_id in form_data when provided."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1, slice_id=42))
+        assert qc["form_data"]["slice_id"] == 42
+
+    def test_no_slice_id_when_not_provided(self):
+        """Should not include slice_id when not provided."""
+        params = build_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            groupby=["region"],
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        assert "slice_id" not in qc["form_data"]
