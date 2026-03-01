@@ -42,18 +42,16 @@ class SupersetClient:
 
         self.config = config or get_config()
         self._http_client: httpx.AsyncClient | None = None
-        # Pass the shared client getter to auth manager
-        self.auth = SupersetAuthManager(self.config, client_getter=lambda: self._client)
+        # Create auth manager first (without client_getter to avoid circular dependency)
+        self.auth = SupersetAuthManager(self.config)
 
     @property
     def _client(self) -> httpx.AsyncClient:
-        """Lazy-initialize HTTP client with cookie persistence."""
+        """Lazy-initialize HTTP client."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(
                 base_url=self.config.api_base_url,
                 timeout=self.config.request_timeout,
-                # Enable cookies to persist CSRF session
-                cookies=httpx.Cookies(),
             )
         return self._http_client
 
@@ -144,11 +142,19 @@ class SupersetClient:
         session = await self.auth.get_valid_session()
 
         headers = {
-            "Authorization": f"Bearer {session.access_token}",
             "X-CSRFToken": session.csrf_token,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        
+        # Only add Bearer token for JWT-based auth (not session-based)
+        if not session.session_based and session.access_token:
+            headers["Authorization"] = f"Bearer {session.access_token}"
+        
+        # For session-based auth, apply session cookies to the client
+        if session.session_based and self.auth.session_cookies:
+            for name, value in self.auth.session_cookies.items():
+                self._client.cookies.set(name, value)
 
         # Ensure endpoint starts with /
         if not endpoint.startswith("/"):

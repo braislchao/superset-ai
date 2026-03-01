@@ -32,6 +32,9 @@ class DatabaseService:
         List all database connections.
         
         GET /api/v1/database/
+        
+        Falls back to /api/v1/sqllab/ endpoint if the primary endpoint
+        returns empty results (workaround for Superset 3.1.0 permissions bug).
         """
         params = {
             "page": page,
@@ -41,6 +44,20 @@ class DatabaseService:
         response = await self.client.get("/database/", params=params)
         
         result = response.get("result", [])
+        
+        # Fallback: If no results, try the /sqllab/ endpoint
+        # which includes databases in its response (Superset 3.1.0 workaround)
+        if not result:
+            logger.debug("Primary /database/ endpoint returned empty, trying /sqllab/ fallback")
+            try:
+                sqllab_response = await self.client.get("/sqllab/")
+                databases_dict = sqllab_response.get("result", {}).get("databases", {})
+                if databases_dict:
+                    result = list(databases_dict.values())
+                    logger.debug(f"Found {len(result)} databases via /sqllab/ fallback")
+            except Exception as e:
+                logger.warning(f"Fallback to /sqllab/ failed: {e}")
+        
         return [DatabaseInfo.model_validate(item) for item in result]
 
     async def get_database(self, database_id: int) -> DatabaseInfo:
