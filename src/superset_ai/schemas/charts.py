@@ -387,6 +387,7 @@ def build_big_number_params(
     return ChartParams(
         viz_type="big_number_total",
         datasource=f"{datasource_id}__table",
+        metric=metric,
         metrics=[metric],
         granularity_sqla=time_column,
         time_range=time_range,
@@ -486,6 +487,7 @@ def build_big_number_with_trendline_params(
     return ChartParams(
         viz_type="big_number",
         datasource=f"{datasource_id}__table",
+        metric=metric,
         metrics=[metric],
         granularity_sqla=time_column,
         time_grain_sqla=time_grain,

@@ -1,6 +1,6 @@
 [project]
 name = "superset-ai"
-version = "0.1.0"
+version = "0.1.2"
 description = "Natural language interface for creating Apache Superset dashboards"
 readme = "README.md"
 requires-python = ">=3.11"

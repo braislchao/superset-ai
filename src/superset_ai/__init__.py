@@ -8,4 +8,4 @@ Primary interfaces:
     - ``superset_ai.cli`` — CLI (``superset-ai chat``, ``superset-ai mcp``, etc.)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"

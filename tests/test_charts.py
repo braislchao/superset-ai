@@ -175,6 +175,26 @@ class TestBuildBigNumberParams:
         assert params.viz_type == "big_number_total"
         assert params.metrics == ["COUNT(*)"]
 
+    def test_sets_metric_singular(self):
+        """Should set metric (singular) so the viz plugin can read it."""
+        params = build_big_number_params(
+            datasource_id=5,
+            metric="SUM(amount)",
+        )
+        assert params.metric == "SUM(amount)"
+
+    def test_sets_metric_singular_dict(self):
+        """Should set metric (singular) when metric is an adhoc dict."""
+        adhoc = {
+            "expressionType": "SIMPLE",
+            "column": {"column_name": "num"},
+            "aggregate": "SUM",
+            "label": "SUM(num)",
+        }
+        params = build_big_number_params(datasource_id=5, metric=adhoc)
+        assert params.metric == adhoc
+        assert params.metrics == [adhoc]
+
 
 # =============================================================================
 # Tests for new chart type builders
@@ -259,6 +279,16 @@ class TestBuildBigNumberWithTrendlineParams:
 
         assert params.time_range == "Last 7 days"
         assert params.time_grain_sqla == "P1W"
+
+    def test_sets_metric_singular(self):
+        """Should set metric (singular) so the viz plugin can read it."""
+        params = build_big_number_with_trendline_params(
+            datasource_id=2,
+            metric="AVG(price)",
+            time_column="ts",
+        )
+        assert params.metric == "AVG(price)"
+        assert params.metrics == ["AVG(price)"]
 
 
 class TestBuildTimeseriesBarChartParams:
