@@ -22,8 +22,8 @@ import httpx
 COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"
 
 # Token storage locations
-TOKEN_CACHE_PATH = Path.home() / ".supersetai" / "copilot_token.json"
-GITHUB_TOKEN_CACHE_PATH = Path.home() / ".supersetai" / "github_token.json"
+TOKEN_CACHE_PATH = Path.home() / ".superset-ai" / "copilot_token.json"
+GITHUB_TOKEN_CACHE_PATH = Path.home() / ".superset-ai" / "github_token.json"
 
 
 @dataclass

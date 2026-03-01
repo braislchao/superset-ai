@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from supersetai.schemas.dashboards import (
+from superset_ai.schemas.dashboards import (
     generate_dashboard_metadata,
     generate_grid_layout,
     generate_position_json,

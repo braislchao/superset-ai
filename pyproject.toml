@@ -1,5 +1,5 @@
 [project]
-name = "supersetai"
+name = "superset-ai"
 version = "0.1.0"
 description = "Natural language interface for creating Apache Superset dashboards"
 readme = "README.md"
@@ -32,16 +32,7 @@ agent = [
     "langchain-core>=0.3.0",
 ]
 dev = [
-    "supersetai[agent]",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "respx>=0.21.0",
-    "ruff>=0.5.0",
-    "mypy>=1.10.0",
-]
-
-[project.optional-dependencies]
-dev = [
+    "superset-ai[agent]",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
@@ -50,14 +41,14 @@ dev = [
 ]
 
 [project.scripts]
-supersetai = "supersetai.cli.main:app"
+superset-ai = "superset_ai.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/supersetai"]
+packages = ["src/superset_ai"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

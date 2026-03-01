@@ -11,9 +11,9 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from supersetai.api.auth import SupersetAuthManager
-from supersetai.core.config import SupersetConfig
-from supersetai.core.exceptions import (
+from superset_ai.api.auth import SupersetAuthManager
+from superset_ai.core.config import SupersetConfig
+from superset_ai.core.exceptions import (
     AuthenticationError,
     PermissionDeniedError,
     RateLimitError,
@@ -38,7 +38,7 @@ class SupersetClient:
     """
 
     def __init__(self, config: SupersetConfig | None = None) -> None:
-        from supersetai.core.config import get_config
+        from superset_ai.core.config import get_config
 
         self.config = config or get_config()
         self._http_client: httpx.AsyncClient | None = None

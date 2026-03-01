@@ -4,8 +4,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from supersetai.core.exceptions import ResourceNotFoundError
-from supersetai.schemas.datasets import (
+from superset_ai.core.exceptions import ResourceNotFoundError
+from superset_ai.schemas.datasets import (
     DatasetCreate,
     DatasetDetail,
     DatasetInfo,
@@ -13,7 +13,7 @@ from supersetai.schemas.datasets import (
 )
 
 if TYPE_CHECKING:
-    from supersetai.api.client import SupersetClient
+    from superset_ai.api.client import SupersetClient
 
 logger = logging.getLogger(__name__)
 

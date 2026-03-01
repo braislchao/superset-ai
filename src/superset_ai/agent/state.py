@@ -120,11 +120,11 @@ class ToolContext:
     Provides access to Superset services without global state.
     """
 
-    from supersetai.api.client import SupersetClient
-    from supersetai.api.charts import ChartService
-    from supersetai.api.dashboards import DashboardService
-    from supersetai.api.databases import DatabaseService
-    from supersetai.api.datasets import DatasetService
+    from superset_ai.api.client import SupersetClient
+    from superset_ai.api.charts import ChartService
+    from superset_ai.api.dashboards import DashboardService
+    from superset_ai.api.databases import DatabaseService
+    from superset_ai.api.datasets import DatasetService
 
     client: "SupersetClient"
     session: SessionState
@@ -137,27 +137,27 @@ class ToolContext:
     @property
     def datasets(self) -> "DatasetService":
         if self._datasets is None:
-            from supersetai.api.datasets import DatasetService
+            from superset_ai.api.datasets import DatasetService
             self._datasets = DatasetService(self.client)
         return self._datasets
     
     @property
     def charts(self) -> "ChartService":
         if self._charts is None:
-            from supersetai.api.charts import ChartService
+            from superset_ai.api.charts import ChartService
             self._charts = ChartService(self.client)
         return self._charts
     
     @property
     def dashboards(self) -> "DashboardService":
         if self._dashboards is None:
-            from supersetai.api.dashboards import DashboardService
+            from superset_ai.api.dashboards import DashboardService
             self._dashboards = DashboardService(self.client)
         return self._dashboards
     
     @property
     def databases(self) -> "DatabaseService":
         if self._databases is None:
-            from supersetai.api.databases import DatabaseService
+            from superset_ai.api.databases import DatabaseService
             self._databases = DatabaseService(self.client)
         return self._databases

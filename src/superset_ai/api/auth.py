@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Callable
 
 import httpx
 
-from supersetai.core.exceptions import AuthenticationError, CSRFTokenError
+from superset_ai.core.exceptions import AuthenticationError, CSRFTokenError
 
 if TYPE_CHECKING:
-    from supersetai.core.config import SupersetConfig
+    from superset_ai.core.config import SupersetConfig
 
 logger = logging.getLogger(__name__)
 

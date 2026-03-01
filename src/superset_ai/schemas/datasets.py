@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from supersetai.schemas.common import (
+from superset_ai.schemas.common import (
     BaseSchema,
     ColumnInfo,
     MetricInfo,

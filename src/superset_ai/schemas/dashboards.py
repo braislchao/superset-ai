@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import Field, field_serializer
 
-from supersetai.schemas.common import BaseSchema, OwnerInfo, TimestampMixin
+from superset_ai.schemas.common import BaseSchema, OwnerInfo, TimestampMixin
 
 
 class DashboardInfo(TimestampMixin, BaseSchema):

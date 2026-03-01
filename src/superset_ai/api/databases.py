@@ -4,10 +4,10 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from supersetai.schemas.common import DatabaseInfo, TableInfo
+from superset_ai.schemas.common import DatabaseInfo, TableInfo
 
 if TYPE_CHECKING:
-    from supersetai.api.client import SupersetClient
+    from superset_ai.api.client import SupersetClient
 
 logger = logging.getLogger(__name__)
 

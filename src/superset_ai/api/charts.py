@@ -4,7 +4,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from supersetai.schemas.charts import (
+from superset_ai.schemas.charts import (
     ChartCreate,
     ChartDetail,
     ChartInfo,
@@ -19,7 +19,7 @@ from supersetai.schemas.charts import (
 )
 
 if TYPE_CHECKING:
-    from supersetai.api.client import SupersetClient
+    from superset_ai.api.client import SupersetClient
 
 logger = logging.getLogger(__name__)
 

@@ -9,11 +9,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from supersetai.agent.prompts import SYSTEM_PROMPT, build_session_context
-from supersetai.agent.state import AgentState, SessionState, SupersetContext, ToolContext
-from supersetai.agent.tools import ALL_TOOLS, set_tool_context
-from supersetai.api.client import SupersetClient
-from supersetai.core.config import SupersetConfig
+from superset_ai.agent.prompts import SYSTEM_PROMPT, build_session_context
+from superset_ai.agent.state import AgentState, SessionState, SupersetContext, ToolContext
+from superset_ai.agent.tools import ALL_TOOLS, set_tool_context
+from superset_ai.api.client import SupersetClient
+from superset_ai.core.config import SupersetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class SupersetAgent:
         config: SupersetConfig | None = None,
         session: SessionState | None = None,
     ) -> None:
-        from supersetai.core.config import get_config
+        from superset_ai.core.config import get_config
 
         self.config = config or get_config()
         self.session = session or SessionState(session_id=str(uuid.uuid4()))
@@ -168,7 +168,7 @@ class SupersetAgent:
         
         # Pre-discover databases
         try:
-            from supersetai.api.databases import DatabaseService
+            from superset_ai.api.databases import DatabaseService
             db_service = DatabaseService(self.client)
             databases = await db_service.list_databases()
             self.session.superset_context.databases = [

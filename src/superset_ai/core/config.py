@@ -11,7 +11,7 @@ class SupersetConfig(BaseSettings):
     """Configuration for Superset connection and API settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="SUPERSETAI_",
+        env_prefix="SUPERSET_AI_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -87,7 +87,7 @@ class SupersetConfig(BaseSettings):
                 raise ValueError("OpenAI API key is required when llm_provider='openai'")
             return self.openai_api_key.get_secret_value()
         else:  # copilot
-            from supersetai.core.copilot_auth import get_copilot_token
+            from superset_ai.core.copilot_auth import get_copilot_token
             return get_copilot_token()
     
     def get_llm_base_url(self) -> str | None:

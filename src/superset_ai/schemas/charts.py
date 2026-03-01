@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_serializer, model_validator
 
-from supersetai.schemas.common import BaseSchema, OwnerInfo, TimestampMixin
+from superset_ai.schemas.common import BaseSchema, OwnerInfo, TimestampMixin
 
 
 # Supported chart types for MVP

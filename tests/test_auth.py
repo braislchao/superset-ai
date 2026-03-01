@@ -3,9 +3,9 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from supersetai.api.auth import SupersetAuthManager, AuthSession
-from supersetai.core.config import SupersetConfig
-from supersetai.core.exceptions import AuthenticationError
+from superset_ai.api.auth import SupersetAuthManager, AuthSession
+from superset_ai.core.config import SupersetConfig
+from superset_ai.core.exceptions import AuthenticationError
 
 
 @pytest.fixture

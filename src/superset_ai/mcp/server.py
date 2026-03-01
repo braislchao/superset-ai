@@ -1,11 +1,11 @@
 """MCP server exposing Superset operations as tools.
 
-This module creates a FastMCP server that wraps the supersetai API client,
+This module creates a FastMCP server that wraps the superset_ai API client,
 making all Superset operations available via the Model Context Protocol.
 
 The server manages a single SupersetClient instance per session, lazily
 initialized on the first tool call. Configuration is read from environment
-variables with the SUPERSETAI_ prefix (see supersetai.core.config).
+variables with the SUPERSET_AI_ prefix (see superset_ai.core.config).
 
 Tools are organized into categories:
 - Discovery: list databases, schemas, tables, datasets, columns
@@ -50,12 +50,12 @@ async def _get_services():
     global _client, _chart_svc, _dashboard_svc, _dataset_svc, _database_svc
 
     if _client is None:
-        from supersetai.api.charts import ChartService
-        from supersetai.api.client import SupersetClient
-        from supersetai.api.dashboards import DashboardService
-        from supersetai.api.databases import DatabaseService
-        from supersetai.api.datasets import DatasetService
-        from supersetai.core.config import SupersetConfig
+        from superset_ai.api.charts import ChartService
+        from superset_ai.api.client import SupersetClient
+        from superset_ai.api.dashboards import DashboardService
+        from superset_ai.api.databases import DatabaseService
+        from superset_ai.api.datasets import DatasetService
+        from superset_ai.core.config import SupersetConfig
 
         config = SupersetConfig()
         _client = SupersetClient(config)
@@ -647,7 +647,7 @@ async def delete_all_charts_and_dashboards() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Entry point for `python -m supersetai.mcp.server`
+# Entry point for `python -m superset_ai.mcp.server`
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":

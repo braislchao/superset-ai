@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from supersetai.schemas.charts import (
+from superset_ai.schemas.charts import (
     build_adhoc_metric,
     build_bar_chart_params,
     build_big_number_params,

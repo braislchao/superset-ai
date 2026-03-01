@@ -13,10 +13,10 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from supersetai import __version__
+from superset_ai import __version__
 
 app = typer.Typer(
-    name="supersetai",
+    name="superset-ai",
     help="Natural language interface for creating Apache Superset dashboards",
     add_completion=False,
 )
@@ -40,19 +40,19 @@ def chat(
         "--url",
         "-u",
         help="Superset base URL",
-        envvar="SUPERSETAI_SUPERSET_BASE_URL",
+        envvar="SUPERSET_AI_SUPERSET_BASE_URL",
     ),
     username: Optional[str] = typer.Option(
         None,
         "--username",
         help="Superset username",
-        envvar="SUPERSETAI_SUPERSET_USERNAME",
+        envvar="SUPERSET_AI_SUPERSET_USERNAME",
     ),
     password: Optional[str] = typer.Option(
         None,
         "--password",
         help="Superset password",
-        envvar="SUPERSETAI_SUPERSET_PASSWORD",
+        envvar="SUPERSET_AI_SUPERSET_PASSWORD",
     ),
     verbose: bool = typer.Option(
         False,
@@ -78,8 +78,8 @@ async def _chat_loop(
     password: str | None,
 ) -> None:
     """Main chat loop."""
-    from supersetai.agent.graph import SupersetAgent
-    from supersetai.core.config import SupersetConfig
+    from superset_ai.agent.graph import SupersetAgent
+    from superset_ai.core.config import SupersetConfig
     
     # Build config with overrides
     config_kwargs = {}
@@ -96,12 +96,12 @@ async def _chat_loop(
     except Exception as e:
         console.print(f"[red]Configuration error:[/red] {e}")
         console.print("\nMake sure you have set the required environment variables:")
-        console.print("  SUPERSETAI_SUPERSET_BASE_URL")
-        console.print("  SUPERSETAI_SUPERSET_USERNAME")
-        console.print("  SUPERSETAI_SUPERSET_PASSWORD")
+        console.print("  SUPERSET_AI_SUPERSET_BASE_URL")
+        console.print("  SUPERSET_AI_SUPERSET_USERNAME")
+        console.print("  SUPERSET_AI_SUPERSET_PASSWORD")
         console.print("\nFor LLM authentication, either:")
-        console.print("  - Run 'supersetai login' for GitHub Copilot")
-        console.print("  - Set SUPERSETAI_OPENAI_API_KEY for OpenAI")
+        console.print("  - Run 'superset-ai login' for GitHub Copilot")
+        console.print("  - Set SUPERSET_AI_OPENAI_API_KEY for OpenAI")
         raise typer.Exit(1)
     
     # Print welcome message
@@ -211,7 +211,7 @@ def _show_help() -> None:
 
 def _show_status(agent: "SupersetAgent") -> None:
     """Display session status."""
-    from supersetai.agent.graph import SupersetAgent
+    from superset_ai.agent.graph import SupersetAgent
     
     summary = agent.get_session_summary()
     
@@ -276,7 +276,7 @@ def login() -> None:
     Opens a browser for OAuth device flow authentication.
     Token is cached for future use.
     """
-    from supersetai.core.copilot_auth import authenticate_copilot, CopilotAuthError
+    from superset_ai.core.copilot_auth import authenticate_copilot, CopilotAuthError
     
     try:
         token = authenticate_copilot(
@@ -298,7 +298,7 @@ def logout() -> None:
     """
     Clear cached GitHub Copilot token.
     """
-    from supersetai.core.copilot_auth import clear_cached_token, TOKEN_CACHE_PATH
+    from superset_ai.core.copilot_auth import clear_cached_token, TOKEN_CACHE_PATH
     
     if TOKEN_CACHE_PATH.exists():
         clear_cached_token()
@@ -314,19 +314,19 @@ def test_connection(
         "--url",
         "-u",
         help="Superset base URL",
-        envvar="SUPERSETAI_SUPERSET_BASE_URL",
+        envvar="SUPERSET_AI_SUPERSET_BASE_URL",
     ),
     username: Optional[str] = typer.Option(
         None,
         "--username",
         help="Superset username",
-        envvar="SUPERSETAI_SUPERSET_USERNAME",
+        envvar="SUPERSET_AI_SUPERSET_USERNAME",
     ),
     password: Optional[str] = typer.Option(
         None,
         "--password",
         help="Superset password",
-        envvar="SUPERSETAI_SUPERSET_PASSWORD",
+        envvar="SUPERSET_AI_SUPERSET_PASSWORD",
     ),
 ) -> None:
     """Test connection to Superset API."""
@@ -340,8 +340,8 @@ async def _test_connection(
     password: str | None,
 ) -> None:
     """Test Superset connection."""
-    from supersetai.api.client import SupersetClient
-    from supersetai.core.config import SupersetConfig
+    from superset_ai.api.client import SupersetClient
+    from superset_ai.core.config import SupersetConfig
     
     config_kwargs = {}
     if url:
@@ -366,7 +366,7 @@ async def _test_connection(
             console.print("[green]Authentication successful![/green]")
             
             # List databases
-            from supersetai.api.databases import DatabaseService
+            from superset_ai.api.databases import DatabaseService
             db_service = DatabaseService(client)
             databases = await db_service.list_databases()
             
@@ -388,7 +388,7 @@ def list_databases(
         "--url",
         "-u",
         help="Superset base URL",
-        envvar="SUPERSETAI_SUPERSET_BASE_URL",
+        envvar="SUPERSET_AI_SUPERSET_BASE_URL",
     ),
 ) -> None:
     """List available databases in Superset."""
@@ -398,9 +398,9 @@ def list_databases(
 
 async def _list_databases(url: str | None) -> None:
     """List databases."""
-    from supersetai.api.client import SupersetClient
-    from supersetai.api.databases import DatabaseService
-    from supersetai.core.config import SupersetConfig
+    from superset_ai.api.client import SupersetClient
+    from superset_ai.api.databases import DatabaseService
+    from superset_ai.core.config import SupersetConfig
     
     config_kwargs = {}
     if url:
@@ -458,10 +458,10 @@ def mcp_server(
     (Claude Desktop, Cursor, VS Code, etc.) can use them.
 
     Examples:
-        supersetai mcp                    # stdio (default)
-        supersetai mcp -t http -p 8000    # HTTP on port 8000
+        superset-ai mcp                    # stdio (default)
+        superset-ai mcp -t http -p 8000    # HTTP on port 8000
     """
-    from supersetai.mcp.server import mcp as mcp_app
+    from superset_ai.mcp.server import mcp as mcp_app
 
     if transport == "http":
         console.print(

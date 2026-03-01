@@ -5,13 +5,13 @@ any MCP-compatible client (Claude Desktop, Cursor, VS Code, etc.).
 
 Usage:
     # Start MCP server via CLI
-    supersetai mcp
+    superset-ai mcp
 
     # Or run directly
-    fastmcp run supersetai.mcp.server:mcp --transport stdio
-    fastmcp run supersetai.mcp.server:mcp --transport http --port 8000
+    fastmcp run superset_ai.mcp.server:mcp --transport stdio
+    fastmcp run superset_ai.mcp.server:mcp --transport http --port 8000
 """
 
-from supersetai.mcp.server import mcp
+from superset_ai.mcp.server import mcp
 
 __all__ = ["mcp"]

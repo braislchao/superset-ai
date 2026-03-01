@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from langchain_core.tools import tool
 
-from supersetai.schemas.charts import CHART_TYPE_MAP
+from superset_ai.schemas.charts import CHART_TYPE_MAP
 
 logger = logging.getLogger(__name__)
 
