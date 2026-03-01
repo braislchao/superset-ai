@@ -40,12 +40,16 @@ def _make_column(
     type: str = "INTEGER",
     is_dttm: bool = False,
     type_generic: int = 0,
+    filterable: bool = True,
+    groupby: bool = True,
 ):
     m = MagicMock()
     m.column_name = column_name
     m.type = type
     m.is_dttm = is_dttm
     m.type_generic = type_generic
+    m.filterable = filterable
+    m.groupby = groupby
     return m
 
 
@@ -214,8 +218,14 @@ class TestDiscoveryOps:
         assert result["table_name"] == "orders"
         assert len(result["columns"]) == 4
 
-        assert result["columns"][0] == {"name": "id", "type": "INTEGER", "is_time": False}
-        assert result["columns"][1] == {"name": "created_at", "type": "TIMESTAMP", "is_time": True}
+        assert result["columns"][0] == {
+            "name": "id", "type": "INTEGER", "is_time": False,
+            "filterable": True, "groupby": True, "type_generic": 0,
+        }
+        assert result["columns"][1] == {
+            "name": "created_at", "type": "TIMESTAMP", "is_time": True,
+            "filterable": True, "groupby": True, "type_generic": 2,
+        }
 
         assert result["time_columns"] == ["created_at"]
         # INT (0) and FLOAT (1) are numeric
@@ -232,6 +242,262 @@ class TestDiscoveryOps:
         result = await discovery_ops.get_dataset_columns(ds_svc, dataset_id=5)
         assert result["time_columns"] == []
         assert result["numeric_columns"] == []
+
+    # -- execute_sql --
+
+    async def test_execute_sql_dict_rows(self):
+        """execute_sql normalises dict-based rows into list-of-lists."""
+        db_svc = AsyncMock()
+        db_svc.execute_sql.return_value = {
+            "columns": [{"name": "id"}, {"name": "name"}],
+            "data": [
+                {"id": 1, "name": "Alice"},
+                {"id": 2, "name": "Bob"},
+            ],
+        }
+
+        result = await discovery_ops.execute_sql(
+            db_svc, database_id=1, sql="SELECT id, name FROM users", limit=100
+        )
+
+        assert result["columns"] == ["id", "name"]
+        assert result["data"] == [[1, "Alice"], [2, "Bob"]]
+        assert result["row_count"] == 2
+        assert result["truncated"] is False
+        db_svc.execute_sql.assert_called_once_with(1, "SELECT id, name FROM users", limit=100)
+
+    async def test_execute_sql_list_rows(self):
+        """execute_sql handles list-based rows (already normalised)."""
+        db_svc = AsyncMock()
+        db_svc.execute_sql.return_value = {
+            "columns": [{"name": "cnt"}],
+            "data": [[42]],
+        }
+
+        result = await discovery_ops.execute_sql(
+            db_svc, database_id=3, sql="SELECT COUNT(*) AS cnt FROM t", limit=10
+        )
+
+        assert result["columns"] == ["cnt"]
+        assert result["data"] == [[42]]
+        assert result["row_count"] == 1
+        assert result["truncated"] is False
+
+    async def test_execute_sql_truncated(self):
+        """Result is marked truncated when row_count == limit."""
+        db_svc = AsyncMock()
+        db_svc.execute_sql.return_value = {
+            "columns": [{"name": "x"}],
+            "data": [{"x": i} for i in range(5)],
+        }
+
+        result = await discovery_ops.execute_sql(
+            db_svc, database_id=1, sql="SELECT x FROM big", limit=5
+        )
+
+        assert result["row_count"] == 5
+        assert result["truncated"] is True
+
+    async def test_execute_sql_empty(self):
+        """Empty result set returns empty data."""
+        db_svc = AsyncMock()
+        db_svc.execute_sql.return_value = {
+            "columns": [{"name": "a"}],
+            "data": [],
+        }
+
+        result = await discovery_ops.execute_sql(
+            db_svc, database_id=1, sql="SELECT a FROM empty_table"
+        )
+
+        assert result["columns"] == ["a"]
+        assert result["data"] == []
+        assert result["row_count"] == 0
+        assert result["truncated"] is False
+
+    async def test_execute_sql_string_columns(self):
+        """Handles columns returned as plain strings instead of dicts."""
+        db_svc = AsyncMock()
+        db_svc.execute_sql.return_value = {
+            "columns": ["col_a", "col_b"],
+            "data": [],
+        }
+
+        result = await discovery_ops.execute_sql(
+            db_svc, database_id=2, sql="SELECT col_a, col_b FROM t"
+        )
+
+        assert result["columns"] == ["col_a", "col_b"]
+
+    # -- profile_dataset --
+
+    async def test_profile_dataset_full(self):
+        """profile_dataset returns row_count, cardinality, nulls, and sample values."""
+        db_svc = AsyncMock()
+        ds_svc = AsyncMock()
+
+        cols = [
+            _make_column("id", "INTEGER", is_dttm=False, type_generic=0),
+            _make_column("name", "VARCHAR", is_dttm=False, type_generic=1),
+            _make_column("created_at", "TIMESTAMP", is_dttm=True, type_generic=2),
+        ]
+        detail = _make_dataset_detail(10, "users", cols)
+        detail.database_id = 1
+        detail.schema_ = "public"
+        ds_svc.get_dataset.return_value = detail
+
+        # COUNT(*) query
+        db_svc.execute_sql = AsyncMock(side_effect=[
+            # 1) row count
+            {
+                "columns": [{"name": "cnt"}],
+                "data": [{"cnt": 100}],
+            },
+            # 2) cardinality + nulls
+            {
+                "columns": [
+                    {"name": "id__cardinality"},
+                    {"name": "id__nulls"},
+                    {"name": "name__cardinality"},
+                    {"name": "name__nulls"},
+                    {"name": "created_at__cardinality"},
+                    {"name": "created_at__nulls"},
+                ],
+                "data": [
+                    {
+                        "id__cardinality": 100,
+                        "id__nulls": 0,
+                        "name__cardinality": 50,
+                        "name__nulls": 3,
+                        "created_at__cardinality": 90,
+                        "created_at__nulls": 1,
+                    }
+                ],
+            },
+            # 3) sample
+            {
+                "columns": [{"name": "id"}, {"name": "name"}, {"name": "created_at"}],
+                "data": [
+                    {"id": 1, "name": "Alice", "created_at": "2024-01-01"},
+                    {"id": 2, "name": "Bob", "created_at": "2024-01-02"},
+                ],
+            },
+        ])
+
+        result = await discovery_ops.profile_dataset(
+            db_svc, ds_svc, dataset_id=10, sample_size=2
+        )
+
+        assert result["dataset_id"] == 10
+        assert result["table_name"] == "users"
+        assert result["row_count"] == 100
+        assert len(result["columns"]) == 3
+
+        id_col = result["columns"][0]
+        assert id_col["name"] == "id"
+        assert id_col["cardinality"] == 100
+        assert id_col["null_count"] == 0
+        assert id_col["sample_values"] == [1, 2]
+
+        name_col = result["columns"][1]
+        assert name_col["cardinality"] == 50
+        assert name_col["null_count"] == 3
+
+        ts_col = result["columns"][2]
+        assert ts_col["is_time"] is True
+
+    async def test_profile_dataset_no_database_id(self):
+        """profile_dataset returns error when dataset has no database_id."""
+        db_svc = AsyncMock()
+        ds_svc = AsyncMock()
+
+        detail = _make_dataset_detail(5, "orphan")
+        detail.database_id = None
+        detail.schema_ = None
+        ds_svc.get_dataset.return_value = detail
+
+        result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=5)
+
+        assert result["dataset_id"] == 5
+        assert "error" in result
+        assert "database_id" in result["error"]
+        db_svc.execute_sql.assert_not_called()
+
+    async def test_profile_dataset_no_columns(self):
+        """profile_dataset returns empty columns when dataset has none."""
+        db_svc = AsyncMock()
+        ds_svc = AsyncMock()
+
+        detail = _make_dataset_detail(7, "empty_table", [])
+        detail.database_id = 2
+        detail.schema_ = None
+        ds_svc.get_dataset.return_value = detail
+
+        result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=7)
+
+        assert result["dataset_id"] == 7
+        assert result["row_count"] == 0
+        assert result["columns"] == []
+        db_svc.execute_sql.assert_not_called()
+
+    async def test_profile_dataset_with_schema(self):
+        """profile_dataset qualifies table name with schema."""
+        db_svc = AsyncMock()
+        ds_svc = AsyncMock()
+
+        cols = [_make_column("val", "INT", type_generic=0)]
+        detail = _make_dataset_detail(8, "metrics", cols)
+        detail.database_id = 3
+        detail.schema_ = "analytics"
+        ds_svc.get_dataset.return_value = detail
+
+        db_svc.execute_sql = AsyncMock(side_effect=[
+            {"columns": [{"name": "cnt"}], "data": [{"cnt": 50}]},
+            {
+                "columns": [{"name": "val__cardinality"}, {"name": "val__nulls"}],
+                "data": [{"val__cardinality": 10, "val__nulls": 0}],
+            },
+            {
+                "columns": [{"name": "val"}],
+                "data": [{"val": 42}],
+            },
+        ])
+
+        result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=8)
+
+        # Verify SQL queries used qualified table name
+        calls = db_svc.execute_sql.call_args_list
+        assert "analytics.metrics" in calls[0].args[1]  # COUNT(*)
+        assert "analytics.metrics" in calls[1].args[1]  # stats
+        assert "analytics.metrics" in calls[2].args[1]  # sample
+
+        assert result["row_count"] == 50
+
+    async def test_profile_dataset_empty_data(self):
+        """profile_dataset handles table with zero rows."""
+        db_svc = AsyncMock()
+        ds_svc = AsyncMock()
+
+        cols = [_make_column("x", "TEXT", type_generic=1)]
+        detail = _make_dataset_detail(9, "empty", cols)
+        detail.database_id = 1
+        detail.schema_ = None
+        ds_svc.get_dataset.return_value = detail
+
+        db_svc.execute_sql = AsyncMock(side_effect=[
+            {"columns": [{"name": "cnt"}], "data": [{"cnt": 0}]},
+            {
+                "columns": [{"name": "x__cardinality"}, {"name": "x__nulls"}],
+                "data": [{"x__cardinality": 0, "x__nulls": 0}],
+            },
+            {"columns": [{"name": "x"}], "data": []},
+        ])
+
+        result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=9)
+
+        assert result["row_count"] == 0
+        assert result["columns"][0]["cardinality"] == 0
+        assert result["columns"][0]["sample_values"] == []
 
 
 # ===========================================================================

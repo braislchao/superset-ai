@@ -190,3 +190,37 @@ class DatabaseService:
             table_name,
         )
         return []
+
+    async def execute_sql(
+        self,
+        database_id: int,
+        sql: str,
+        *,
+        limit: int = 100,
+        schema: str | None = None,
+    ) -> dict:
+        """
+        Execute a SQL query via Superset SQL Lab.
+
+        POST /api/v1/sqllab/execute/
+
+        Args:
+            database_id: The database to run the query against.
+            sql: The SQL query string.
+            limit: Maximum number of rows to return (default 100).
+            schema: Optional schema context for the query.
+
+        Returns:
+            Raw response dict from Superset containing ``columns`` and ``data``.
+        """
+        payload: dict = {
+            "database_id": database_id,
+            "sql": sql,
+            "queryLimit": limit,
+        }
+        if schema is not None:
+            payload["schema"] = schema
+
+        logger.info("Executing SQL on database %d (limit=%d)", database_id, limit)
+        response = await self.client.post("/sqllab/execute/", json=payload)
+        return response

@@ -330,6 +330,54 @@ class TestToolWiring:
             result = await list_databases()
             assert result["error_type"] == "authentication_error"
 
+    async def test_execute_sql_tool(self):
+        mock_chart_svc = AsyncMock()
+        mock_dash_svc = AsyncMock()
+        mock_ds_svc = AsyncMock()
+        mock_db_svc = AsyncMock()
+
+        with patch(
+            "superset_ai.mcp.server._get_services",
+            new_callable=AsyncMock,
+            return_value=(mock_chart_svc, mock_dash_svc, mock_ds_svc, mock_db_svc),
+        ):
+            with patch(
+                "superset_ai.mcp.server.discovery_ops.execute_sql",
+                new_callable=AsyncMock,
+                return_value={"columns": ["x"], "data": [[1]], "row_count": 1, "truncated": False},
+            ) as mock_op:
+                from superset_ai.mcp.server import execute_sql
+
+                result = await execute_sql(
+                    database_id=1,
+                    sql="SELECT 1 AS x",
+                    limit=100,
+                )
+                mock_op.assert_called_once_with(mock_db_svc, 1, "SELECT 1 AS x", 100)
+                assert result["row_count"] == 1
+
+    async def test_profile_dataset_tool(self):
+        mock_chart_svc = AsyncMock()
+        mock_dash_svc = AsyncMock()
+        mock_ds_svc = AsyncMock()
+        mock_db_svc = AsyncMock()
+
+        with patch(
+            "superset_ai.mcp.server._get_services",
+            new_callable=AsyncMock,
+            return_value=(mock_chart_svc, mock_dash_svc, mock_ds_svc, mock_db_svc),
+        ):
+            with patch(
+                "superset_ai.mcp.server.discovery_ops.profile_dataset",
+                new_callable=AsyncMock,
+                return_value={"dataset_id": 10, "table_name": "t", "row_count": 50, "columns": []},
+            ) as mock_op:
+                from superset_ai.mcp.server import profile_dataset
+
+                result = await profile_dataset(dataset_id=10, sample_size=3)
+                mock_op.assert_called_once_with(mock_db_svc, mock_ds_svc, 10, 3)
+                assert result["row_count"] == 50
+
 
 # =========================================================================
 # C. Tool registration test
@@ -342,8 +390,8 @@ class TestToolRegistration:
     async def test_expected_tool_count(self):
         tools = await mcp.list_tools()
         tool_names = [t.name for t in tools]
-        assert len(tools) == 37, (
-            f"Expected 37 registered tools, got {len(tools)}. "
+        assert len(tools) == 39, (
+            f"Expected 39 registered tools, got {len(tools)}. "
             f"Registered: {sorted(tool_names)}"
         )
 
@@ -356,6 +404,8 @@ class TestToolRegistration:
             "list_tables",
             "get_dataset_columns",
             "list_existing_datasets",
+            "execute_sql",
+            "profile_dataset",
             "find_or_create_dataset",
             "create_bar_chart",
             "create_line_chart",

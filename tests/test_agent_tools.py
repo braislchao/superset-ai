@@ -22,6 +22,8 @@ from superset_ai.agent.tools import (
     list_tables,
     get_dataset_columns,
     list_existing_datasets,
+    execute_sql,
+    profile_dataset,
     # Dataset tools
     find_or_create_dataset,
     # Chart creation tools
@@ -106,8 +108,8 @@ class TestAllToolsList:
     """Tests for the ALL_TOOLS registry."""
 
     def test_expected_count(self):
-        """ALL_TOOLS should contain exactly 37 tools."""
-        assert len(ALL_TOOLS) == 37
+        """ALL_TOOLS should contain exactly 39 tools."""
+        assert len(ALL_TOOLS) == 39
 
     def test_all_entries_are_callable(self):
         """Every entry in ALL_TOOLS must be callable."""
@@ -231,6 +233,52 @@ class TestDiscoveryToolWiring:
             result = await list_existing_datasets.ainvoke({"database_id": 2})
 
         mock_op.assert_awaited_once_with(ctx.datasets, 2)
+        assert result == fake_result
+
+    async def test_execute_sql_delegates(self):
+        """execute_sql delegates to discovery_ops.execute_sql with correct args."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {"columns": ["x"], "data": [[1]], "row_count": 1, "truncated": False}
+
+        with patch(
+            f"{OPS_BASE}.discovery_ops.execute_sql",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await execute_sql.ainvoke({
+                "database_id": 1,
+                "sql": "SELECT 1 AS x",
+                "limit": 50,
+            })
+
+        mock_op.assert_awaited_once_with(ctx.databases, 1, "SELECT 1 AS x", 50)
+        assert result == fake_result
+
+    async def test_profile_dataset_delegates(self):
+        """profile_dataset delegates to discovery_ops.profile_dataset with correct args."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "dataset_id": 10,
+            "table_name": "orders",
+            "row_count": 100,
+            "columns": [{"name": "id", "cardinality": 100}],
+        }
+
+        with patch(
+            f"{OPS_BASE}.discovery_ops.profile_dataset",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await profile_dataset.ainvoke({
+                "dataset_id": 10,
+                "sample_size": 3,
+            })
+
+        mock_op.assert_awaited_once_with(ctx.databases, ctx.datasets, 10, 3)
         assert result == fake_result
 
 

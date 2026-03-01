@@ -254,6 +254,51 @@ async def list_existing_datasets(
     return await discovery_ops.list_existing_datasets(ds_svc, database_id)
 
 
+@mcp.tool(tags={"discovery"})
+@_handle_errors
+async def execute_sql(
+    database_id: int,
+    sql: str,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Execute a SQL query against a Superset database.
+
+    Use this to explore data, validate column names, check cardinality,
+    or run ad-hoc analysis before creating charts.
+
+    Args:
+        database_id: The database ID to run the query against.
+        sql: The SQL query string.
+        limit: Maximum number of rows to return (default 100).
+
+    Returns columns, data rows, row count, and whether the result was truncated.
+    """
+    _, _, _, db_svc = await _get_services()
+    return await discovery_ops.execute_sql(db_svc, database_id, sql, limit)
+
+
+@mcp.tool(tags={"discovery"})
+@_handle_errors
+async def profile_dataset(
+    dataset_id: int,
+    sample_size: int = 5,
+) -> dict[str, Any]:
+    """Profile a dataset to understand its data shape before creating charts.
+
+    Runs exploratory SQL queries to gather row count, per-column cardinality,
+    null counts, and sample values. Use this to make informed decisions about
+    which chart type and columns to use.
+
+    Args:
+        dataset_id: The dataset to profile.
+        sample_size: Number of sample values to retrieve per column (default 5).
+
+    Returns dataset metadata, row count, and per-column statistics.
+    """
+    _, _, ds_svc, db_svc = await _get_services()
+    return await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id, sample_size)
+
+
 # ---------------------------------------------------------------------------
 # Dataset tools
 # ---------------------------------------------------------------------------

@@ -128,6 +128,53 @@ async def list_existing_datasets(database_id: int | None = None) -> list[dict[st
     return await discovery_ops.list_existing_datasets(ctx.datasets, database_id)
 
 
+@tool
+async def execute_sql(
+    database_id: int,
+    sql: str,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """
+    Execute a SQL query against a Superset database.
+
+    Use this to explore data, validate column names, check cardinality,
+    or run ad-hoc analysis before creating charts.
+
+    Args:
+        database_id: The database ID to run the query against
+        sql: The SQL query string
+        limit: Maximum number of rows to return (default 100)
+
+    Returns columns, data rows, row count, and whether the result was truncated.
+    """
+    ctx = get_tool_context()
+    return await discovery_ops.execute_sql(ctx.databases, database_id, sql, limit)
+
+
+@tool
+async def profile_dataset(
+    dataset_id: int,
+    sample_size: int = 5,
+) -> dict[str, Any]:
+    """
+    Profile a dataset to understand its data shape before creating charts.
+
+    Runs exploratory SQL queries to gather row count, per-column cardinality,
+    null counts, and sample values. Use this to make informed decisions about
+    which chart type and columns to use.
+
+    Args:
+        dataset_id: The dataset to profile
+        sample_size: Number of sample values to retrieve per column (default 5)
+
+    Returns dataset metadata, row count, and per-column statistics.
+    """
+    ctx = get_tool_context()
+    return await discovery_ops.profile_dataset(
+        ctx.databases, ctx.datasets, dataset_id, sample_size
+    )
+
+
 # =============================================================================
 # Dataset Tools
 # =============================================================================
@@ -1064,6 +1111,8 @@ ALL_TOOLS = [
     list_tables,
     get_dataset_columns,
     list_existing_datasets,
+    execute_sql,
+    profile_dataset,
     # Datasets
     find_or_create_dataset,
     # Charts — original types
