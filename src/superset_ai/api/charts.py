@@ -79,7 +79,7 @@ class ChartService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Creating chart: {spec.slice_name} ({spec.viz_type})")
+        logger.info("Creating chart: %s (%s)", spec.slice_name, spec.viz_type)
         response = await self.client.post("/chart/", json=payload)
         
         chart_id = response.get("id")
@@ -101,7 +101,7 @@ class ChartService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Updating chart {chart_id}")
+        logger.info("Updating chart %d", chart_id)
         await self.client.put(f"/chart/{chart_id}", json=payload)
         
         return await self.get_chart(chart_id)
@@ -112,7 +112,7 @@ class ChartService:
         
         DELETE /api/v1/chart/{id}
         """
-        logger.info(f"Deleting chart {chart_id}")
+        logger.info("Deleting chart %d", chart_id)
         await self.client.delete(f"/chart/{chart_id}")
 
     async def add_to_dashboards(
@@ -144,7 +144,7 @@ class ChartService:
                 all_dashboard_ids.append(dashboard_id)
         
         # Update the chart
-        logger.info(f"Adding chart {chart_id} to dashboards: {dashboard_ids}")
+        logger.info("Adding chart %d to dashboards: %s", chart_id, dashboard_ids)
         await self.client.put(f"/chart/{chart_id}", json={"dashboards": all_dashboard_ids})
         
         return await self.get_chart(chart_id)

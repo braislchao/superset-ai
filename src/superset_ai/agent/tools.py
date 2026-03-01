@@ -5,8 +5,6 @@ from typing import Any, Literal
 
 from langchain_core.tools import tool
 
-from superset_ai.schemas.charts import CHART_TYPE_MAP
-
 logger = logging.getLogger(__name__)
 
 # Global context holder - will be set by the agent
@@ -45,7 +43,7 @@ async def list_databases() -> list[dict[str, Any]]:
     result = [
         {
             "id": db.id,
-            "name": db.database_name,
+            "database_name": db.database_name,
             "backend": db.backend,
         }
         for db in databases

@@ -54,9 +54,9 @@ class DatabaseService:
                 databases_dict = sqllab_response.get("result", {}).get("databases", {})
                 if databases_dict:
                     result = list(databases_dict.values())
-                    logger.debug(f"Found {len(result)} databases via /sqllab/ fallback")
+                    logger.debug("Found %d databases via /sqllab/ fallback", len(result))
             except Exception as e:
-                logger.warning(f"Fallback to /sqllab/ failed: {e}")
+                logger.warning("Fallback to /sqllab/ failed: %s", e)
         
         return [DatabaseInfo.model_validate(item) for item in result]
 
@@ -144,7 +144,7 @@ class DatabaseService:
             await self.client.get(f"/database/{database_id}/connection")
             return True
         except Exception as e:
-            logger.warning(f"Database connection test failed: {e}")
+            logger.warning("Database connection test failed: %s", e)
             return False
 
     async def find_by_name(self, name: str) -> DatabaseInfo | None:
@@ -185,7 +185,8 @@ class DatabaseService:
         # or require the user to have an existing dataset
         
         logger.warning(
-            f"get_table_columns for {table_name} not fully implemented. "
-            "Use DatasetService.get_dataset() with an existing dataset instead."
+            "get_table_columns for %s not fully implemented. "
+            "Use DatasetService.get_dataset() with an existing dataset instead.",
+            table_name,
         )
         return []

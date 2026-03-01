@@ -17,10 +17,19 @@ Tools are organized into categories:
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any, Literal
 
 from fastmcp import FastMCP
+
+from superset_ai.core.exceptions import (
+    AuthenticationError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+    SupersetAIError,
+    ValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +84,69 @@ async def _get_services():
 
 
 # ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+
+def _error_response(error: str, error_type: str, **extra: Any) -> dict[str, Any]:
+    """Build a structured error dict for MCP tool responses."""
+    result: dict[str, Any] = {"error": error, "error_type": error_type}
+    result.update(extra)
+    return result
+
+
+def _handle_errors(fn):
+    """Decorator that catches SupersetAI exceptions and returns structured errors.
+
+    MCP tool functions that raise raw exceptions produce unhelpful tracebacks
+    for the LLM consumer. This wrapper catches known exception types and
+    converts them into structured error dicts with actionable messages.
+    """
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await fn(*args, **kwargs)
+        except ResourceNotFoundError as e:
+            return _error_response(
+                error=str(e),
+                error_type="not_found",
+                resource_type=e.resource_type,
+                resource_id=e.resource_id,
+            )
+        except ValidationError as e:
+            return _error_response(
+                error=str(e),
+                error_type="validation_error",
+                status_code=e.status_code,
+            )
+        except AuthenticationError as e:
+            return _error_response(
+                error=str(e),
+                error_type="authentication_error",
+                hint="Check SUPERSET_AI_SUPERSET_USERNAME and SUPERSET_AI_SUPERSET_PASSWORD env vars.",
+            )
+        except PermissionDeniedError as e:
+            return _error_response(
+                error=str(e),
+                error_type="permission_denied",
+            )
+        except SupersetAIError as e:
+            return _error_response(
+                error=str(e),
+                error_type="superset_error",
+            )
+        except Exception as e:
+            logger.exception("Unexpected error in MCP tool %s", fn.__name__)
+            return _error_response(
+                error=f"Unexpected error: {e}",
+                error_type="internal_error",
+            )
+
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
 # Discovery tools
 # ---------------------------------------------------------------------------
 
@@ -83,6 +155,7 @@ async def _get_services():
     annotations={"readOnlyHint": True},
     tags={"discovery"},
 )
+@_handle_errors
 async def list_databases() -> list[dict[str, Any]]:
     """List all available database connections in Superset.
 
@@ -101,6 +174,7 @@ async def list_databases() -> list[dict[str, Any]]:
     annotations={"readOnlyHint": True},
     tags={"discovery"},
 )
+@_handle_errors
 async def list_schemas(database_id: int) -> list[str]:
     """List all schemas in a specific database.
 
@@ -117,6 +191,7 @@ async def list_schemas(database_id: int) -> list[str]:
     annotations={"readOnlyHint": True},
     tags={"discovery"},
 )
+@_handle_errors
 async def list_tables(
     database_id: int,
     schema_name: str | None = None,
@@ -140,6 +215,7 @@ async def list_tables(
     annotations={"readOnlyHint": True},
     tags={"discovery"},
 )
+@_handle_errors
 async def get_dataset_columns(dataset_id: int) -> dict[str, Any]:
     """Get column information for a dataset.
 
@@ -181,6 +257,7 @@ async def get_dataset_columns(dataset_id: int) -> dict[str, Any]:
     annotations={"readOnlyHint": True},
     tags={"discovery"},
 )
+@_handle_errors
 async def list_existing_datasets(
     database_id: int | None = None,
 ) -> list[dict[str, Any]]:
@@ -208,6 +285,7 @@ async def list_existing_datasets(
 
 
 @mcp.tool(tags={"datasets"})
+@_handle_errors
 async def find_or_create_dataset(
     database_id: int,
     table_name: str,
@@ -244,6 +322,7 @@ async def find_or_create_dataset(
 
 
 @mcp.tool(tags={"charts"})
+@_handle_errors
 async def create_bar_chart(
     title: str,
     dataset_id: int,
@@ -277,6 +356,7 @@ async def create_bar_chart(
 
 
 @mcp.tool(tags={"charts"})
+@_handle_errors
 async def create_line_chart(
     title: str,
     dataset_id: int,
@@ -316,6 +396,7 @@ async def create_line_chart(
 
 
 @mcp.tool(tags={"charts"})
+@_handle_errors
 async def create_pie_chart(
     title: str,
     dataset_id: int,
@@ -349,6 +430,7 @@ async def create_pie_chart(
 
 
 @mcp.tool(tags={"charts"})
+@_handle_errors
 async def create_table_chart(
     title: str,
     dataset_id: int,
@@ -385,6 +467,7 @@ async def create_table_chart(
 
 
 @mcp.tool(tags={"charts"})
+@_handle_errors
 async def create_metric_chart(
     title: str,
     dataset_id: int,
@@ -423,6 +506,7 @@ async def create_metric_chart(
     annotations={"readOnlyHint": True},
     tags={"charts"},
 )
+@_handle_errors
 async def list_all_charts() -> list[dict[str, Any]]:
     """List all charts in Superset.
 
@@ -440,6 +524,7 @@ async def list_all_charts() -> list[dict[str, Any]]:
     annotations={"destructiveHint": True},
     tags={"charts"},
 )
+@_handle_errors
 async def delete_chart(chart_id: int) -> dict[str, Any]:
     """Delete a chart from Superset.
 
@@ -478,6 +563,7 @@ async def delete_chart(chart_id: int) -> dict[str, Any]:
     annotations={"readOnlyHint": True},
     tags={"dashboards"},
 )
+@_handle_errors
 async def list_all_dashboards() -> list[dict[str, Any]]:
     """List all dashboards in Superset.
 
@@ -496,6 +582,7 @@ async def list_all_dashboards() -> list[dict[str, Any]]:
 
 
 @mcp.tool(tags={"dashboards"})
+@_handle_errors
 async def create_dashboard(
     title: str,
     chart_ids: list[int],
@@ -523,6 +610,7 @@ async def create_dashboard(
 
 
 @mcp.tool(tags={"dashboards"})
+@_handle_errors
 async def add_chart_to_dashboard(
     dashboard_id: int,
     chart_ids: list[int],
@@ -550,6 +638,7 @@ async def add_chart_to_dashboard(
     annotations={"destructiveHint": True},
     tags={"dashboards"},
 )
+@_handle_errors
 async def delete_dashboard(dashboard_id: int) -> dict[str, Any]:
     """Delete a dashboard from Superset.
 
@@ -590,6 +679,7 @@ async def delete_dashboard(dashboard_id: int) -> dict[str, Any]:
     annotations={"destructiveHint": True},
     tags={"bulk"},
 )
+@_handle_errors
 async def delete_all_charts_and_dashboards() -> dict[str, Any]:
     """Delete ALL charts and dashboards from Superset.
 

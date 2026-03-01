@@ -50,48 +50,6 @@ After completing actions:
 """
 
 
-PLANNING_PROMPT = """Based on the user's request, plan the sequence of actions needed.
-
-User Request: {user_request}
-
-Available Context:
-- Databases: {databases}
-- Active Dashboard: {active_dashboard}
-- Recent Charts: {recent_charts}
-
-Plan your response by:
-1. Identifying what data source to use
-2. Determining what assets need to be created
-3. Specifying the chart types and configurations needed
-
-Return a structured plan of actions to execute.
-"""
-
-
-CHART_CREATION_PROMPT = """Create a chart based on these specifications:
-
-Chart Request:
-- Title: {title}
-- Type: {chart_type}
-- Data source: {datasource}
-- Metrics: {metrics}
-- Dimensions: {dimensions}
-- Filters: {filters}
-
-Dataset Information:
-- Available columns: {columns}
-- Time columns: {time_columns}
-- Numeric columns: {numeric_columns}
-
-Validate that:
-1. All referenced columns exist
-2. Metrics are appropriate for the data types
-3. Time columns are used for timeseries charts
-
-Return the chart configuration or validation errors.
-"""
-
-
 def build_session_context(
     databases: list[dict],
     active_dashboard: dict | None,

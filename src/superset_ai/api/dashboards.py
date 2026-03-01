@@ -69,7 +69,7 @@ class DashboardService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Creating dashboard: {spec.dashboard_title}")
+        logger.info("Creating dashboard: %s", spec.dashboard_title)
         response = await self.client.post("/dashboard/", json=payload)
         
         dashboard_id = response.get("id")
@@ -91,7 +91,7 @@ class DashboardService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Updating dashboard {dashboard_id}")
+        logger.info("Updating dashboard %d", dashboard_id)
         await self.client.put(f"/dashboard/{dashboard_id}", json=payload)
         
         return await self.get_dashboard(dashboard_id)
@@ -102,7 +102,7 @@ class DashboardService:
         
         DELETE /api/v1/dashboard/{id}
         """
-        logger.info(f"Deleting dashboard {dashboard_id}")
+        logger.info("Deleting dashboard %d", dashboard_id)
         await self.client.delete(f"/dashboard/{dashboard_id}")
 
     # =========================================================================
@@ -219,7 +219,7 @@ class DashboardService:
         # Add new dashboard if not already present
         if dashboard_id not in existing_dashboard_ids:
             all_dashboard_ids = existing_dashboard_ids + [dashboard_id]
-            logger.info(f"Associating chart {chart_id} with dashboard {dashboard_id}")
+            logger.info("Associating chart %d with dashboard %d", chart_id, dashboard_id)
             await self.client.put(f"/chart/{chart_id}", json={"dashboards": all_dashboard_ids})
 
     async def remove_chart_from_dashboard(
@@ -275,7 +275,7 @@ class DashboardService:
         # Remove the dashboard if present
         if dashboard_id in existing_dashboard_ids:
             remaining_dashboard_ids = [d_id for d_id in existing_dashboard_ids if d_id != dashboard_id]
-            logger.info(f"Disassociating chart {chart_id} from dashboard {dashboard_id}")
+            logger.info("Disassociating chart %d from dashboard %d", chart_id, dashboard_id)
             await self.client.put(f"/chart/{chart_id}", json={"dashboards": remaining_dashboard_ids})
 
     async def find_by_title(self, title: str) -> DashboardInfo | None:

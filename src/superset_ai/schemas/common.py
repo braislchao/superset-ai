@@ -1,7 +1,6 @@
 """Common schema types used across Superset API payloads."""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -9,22 +8,7 @@ from pydantic import BaseModel, Field
 class BaseSchema(BaseModel):
     """Base model with common configuration."""
 
-    model_config = {"extra": "ignore", "populate_by_name": True}
-
-
-class PaginatedResponse(BaseModel):
-    """Standard paginated response from Superset API."""
-
-    count: int = Field(description="Total number of items")
-    ids: list[int] = Field(default_factory=list, description="List of item IDs")
-    result: list[dict[str, Any]] = Field(default_factory=list, description="List of items")
-
-
-class SingleResponse(BaseModel):
-    """Standard single item response from Superset API."""
-
-    id: int | None = Field(default=None, description="Created/updated item ID")
-    result: dict[str, Any] = Field(default_factory=dict, description="Item data")
+    model_config = {"extra": "ignore", "populate_by_name": True, "serialize_by_alias": True}
 
 
 class ColumnInfo(BaseSchema):

@@ -116,12 +116,6 @@ class SupersetClient:
     # Internal Methods
     # =========================================================================
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=1, max=10),
-        retry=retry_if_exception_type((RateLimitError, httpx.TimeoutException)),
-        reraise=True,
-    )
     async def _request(
         self,
         method: str,
@@ -137,8 +131,33 @@ class SupersetClient:
         Handles:
         - Adding auth headers (JWT + CSRF)
         - Auto-retry on 401 (token expired)
+        - Retry with exponential backoff on rate limits and timeouts
         - Error classification
         """
+
+        @retry(
+            stop=stop_after_attempt(self.config.max_retries),
+            wait=wait_exponential_jitter(initial=1, max=10),
+            retry=retry_if_exception_type((RateLimitError, httpx.TimeoutException)),
+            reraise=True,
+        )
+        async def _do_request() -> dict[str, Any]:
+            return await self._execute_request(
+                method, endpoint, json=json, params=params, _retry_auth=_retry_auth
+            )
+
+        return await _do_request()
+
+    async def _execute_request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        _retry_auth: bool = True,
+    ) -> dict[str, Any]:
+        """Execute a single authenticated request (called by _request with retry)."""
         session = await self.auth.get_valid_session()
 
         headers = {
@@ -160,7 +179,7 @@ class SupersetClient:
         if not endpoint.startswith("/"):
             endpoint = f"/{endpoint}"
 
-        logger.debug(f"{method} {endpoint}")
+        logger.debug("%s %s", method, endpoint)
 
         try:
             response = await self._client.request(
@@ -171,7 +190,7 @@ class SupersetClient:
                 headers=headers,
             )
         except httpx.TimeoutException:
-            logger.warning(f"Request timeout: {method} {endpoint}")
+            logger.warning("Request timeout: %s %s", method, endpoint)
             raise
         except httpx.RequestError as e:
             raise SupersetAPIError(f"Request failed: {e}") from e
@@ -180,7 +199,7 @@ class SupersetClient:
         if response.status_code == 401 and _retry_auth:
             logger.info("Received 401, attempting token refresh")
             await self.auth.invalidate()
-            return await self._request(
+            return await self._execute_request(
                 method, endpoint, json=json, params=params, _retry_auth=False
             )
 
@@ -267,7 +286,7 @@ class SupersetClient:
         try:
             return response.json()
         except Exception as e:
-            logger.warning(f"Failed to parse JSON response: {e}")
+            logger.warning("Failed to parse JSON response: %s", e)
             return {"raw_response": response.text}
 
     def _extract_error_message(self, body: dict | str) -> str | None:

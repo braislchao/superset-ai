@@ -85,7 +85,7 @@ class DatasetService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Creating dataset: {spec.table_name}")
+        logger.info("Creating dataset: %s", spec.table_name)
         response = await self.client.post("/dataset/", json=payload)
         
         dataset_id = response.get("id")
@@ -109,7 +109,7 @@ class DatasetService:
         """
         payload = spec.model_dump(exclude_none=True)
         
-        logger.info(f"Updating dataset {dataset_id}")
+        logger.info("Updating dataset %d", dataset_id)
         await self.client.put(f"/dataset/{dataset_id}", json=payload)
         
         return await self.get_dataset(dataset_id)
@@ -120,7 +120,7 @@ class DatasetService:
         
         DELETE /api/v1/dataset/{id}
         """
-        logger.info(f"Deleting dataset {dataset_id}")
+        logger.info("Deleting dataset %d", dataset_id)
         await self.client.delete(f"/dataset/{dataset_id}")
 
     async def refresh_columns(self, dataset_id: int) -> DatasetDetail:
@@ -129,7 +129,7 @@ class DatasetService:
         
         PUT /api/v1/dataset/{id}/refresh
         """
-        logger.info(f"Refreshing columns for dataset {dataset_id}")
+        logger.info("Refreshing columns for dataset %d", dataset_id)
         await self.client.put(f"/dataset/{dataset_id}/refresh")
         return await self.get_dataset(dataset_id)
 
@@ -185,7 +185,7 @@ class DatasetService:
         )
         
         if existing:
-            logger.info(f"Found existing dataset: {existing.table_name} (id={existing.id})")
+            logger.info("Found existing dataset: %s (id=%d)", existing.table_name, existing.id)
             return await self.get_dataset(existing.id)
         
         # Create new dataset
@@ -278,13 +278,13 @@ class DatasetService:
                             all_datasets.append(dataset_info)
                             
                 except Exception as e:
-                    logger.warning(f"Could not get tables for database {db_id}: {e}")
+                    logger.warning("Could not get tables for database %d: %s", db_id, e)
                     continue
             
             return all_datasets
             
         except Exception as e:
-            logger.error(f"Fallback dataset listing failed: {e}")
+            logger.error("Fallback dataset listing failed: %s", e)
             return []
 
     async def _get_dataset_by_table_name(
@@ -324,5 +324,5 @@ class DatasetService:
             )
             
         except Exception as e:
-            logger.debug(f"Could not get dataset info for {table_name}: {e}")
+            logger.debug("Could not get dataset info for %s: %s", table_name, e)
             return None

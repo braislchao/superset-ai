@@ -11,9 +11,9 @@ import json
 import time
 import webbrowser
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -35,7 +35,7 @@ class CopilotToken:
     
     def is_expired(self, buffer_seconds: int = 300) -> bool:
         """Check if token is expired or about to expire."""
-        return datetime.now() >= (self.expires_at - timedelta(seconds=buffer_seconds))
+        return datetime.now(tz=timezone.utc) >= (self.expires_at - timedelta(seconds=buffer_seconds))
     
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dict for caching."""
@@ -233,13 +233,13 @@ def exchange_for_copilot_token(github_token: str) -> CopilotToken:
         
         return CopilotToken(
             access_token=data["token"],
-            expires_at=datetime.fromtimestamp(data["expires_at"]),
+            expires_at=datetime.fromtimestamp(data["expires_at"], tz=timezone.utc),
         )
 
 
 def authenticate_copilot(
     open_browser: bool = True,
-    print_fn: callable = print,
+    print_fn: Callable[..., Any] = print,
 ) -> CopilotToken:
     """
     Full Copilot authentication flow.

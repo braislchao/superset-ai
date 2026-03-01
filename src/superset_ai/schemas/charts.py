@@ -17,29 +17,6 @@ ChartType = Literal[
     "big_number_total",
 ]
 
-# Mapping from natural language to Superset viz_type
-CHART_TYPE_MAP: dict[str, ChartType] = {
-    "bar": "dist_bar",
-    "bar chart": "dist_bar",
-    "bar_chart": "dist_bar",
-    "legacy bar": "dist_bar",
-    "distribution bar": "dist_bar",
-    "line": "line",
-    "line chart": "line",
-    "line_chart": "line",
-    "timeseries": "line",
-    "pie": "pie",
-    "pie chart": "pie",
-    "pie_chart": "pie",
-    "table": "table",
-    "data table": "table",
-    "metric": "big_number_total",
-    "number": "big_number_total",
-    "big number": "big_number_total",
-    "kpi": "big_number_total",
-}
-
-
 class ChartInfo(TimestampMixin, BaseSchema):
     """
     Chart information returned from list endpoint.
@@ -115,19 +92,6 @@ class AdhocMetric(BaseSchema):
     sqlExpression: str | None = None
     label: str | None = None
     optionName: str | None = None
-
-
-class AdhocFilter(BaseSchema):
-    """
-    Adhoc filter definition for chart params.
-    """
-
-    expressionType: Literal["SIMPLE", "SQL"] = "SIMPLE"
-    subject: str | None = None  # Column name
-    operator: str | None = None  # ==, !=, >, <, IN, NOT IN, etc.
-    comparator: Any = None  # Value to compare
-    clause: Literal["WHERE", "HAVING"] = "WHERE"
-    sqlExpression: str | None = None
 
 
 class ChartParams(BaseSchema):
