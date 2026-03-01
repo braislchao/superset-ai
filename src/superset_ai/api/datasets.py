@@ -312,16 +312,15 @@ class DatasetService:
             if result:
                 return DatasetInfo.model_validate(result[0])
             
-            # If filter didn't work, construct a minimal DatasetInfo
-            # This allows the user to see that tables exist even if full
-            # dataset details aren't available via API
-            return DatasetInfo(
-                id=-1,  # Placeholder - actual ID unknown
-                table_name=table_name,
-                schema="public",
-                database={"id": database_id, "database_name": database_name},
-                kind="physical",
+            # Table exists in database but is not registered as a dataset.
+            # Return None rather than a synthetic DatasetInfo with a fake ID,
+            # which would cause downstream failures (e.g. get_dataset(-1)).
+            logger.debug(
+                "Table '%s' exists in database %d but is not registered as a dataset",
+                table_name,
+                database_id,
             )
+            return None
             
         except Exception as e:
             logger.debug("Could not get dataset info for %s: %s", table_name, e)

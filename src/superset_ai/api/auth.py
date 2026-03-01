@@ -146,10 +146,19 @@ class SupersetAuthManager:
         Perform authentication to Superset.
         
         Tries session-based auth first (Superset 6.x), falls back to JWT (legacy).
+        Connection errors are NOT caught — they indicate Superset is unreachable
+        and should propagate immediately rather than being masked by a JWT fallback
+        that would also fail.
         """
         try:
             # Try session-based authentication first (Superset 6.x+)
             return await self._authenticate_session_based()
+        except httpx.ConnectError:
+            # Superset is unreachable — don't mask this with a JWT fallback
+            raise
+        except httpx.TimeoutException:
+            # Connection timed out — same reasoning
+            raise
         except Exception as e:
             logger.debug("Session-based auth failed, trying JWT: %s", e)
             # Fall back to JWT authentication

@@ -1,5 +1,6 @@
 """Agent tools for Superset operations."""
 
+import contextvars
 import logging
 from typing import Any, Literal
 
@@ -7,21 +8,25 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-# Global context holder - will be set by the agent
-_tool_context = None
+# Context variable for per-task tool context isolation.
+# Unlike a module-level global, ContextVar is safe for concurrent async tasks —
+# each asyncio Task gets its own copy of the value.
+_tool_context_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "_tool_context_var",
+)
 
 
 def set_tool_context(context: Any) -> None:
     """Set the tool context for the current execution."""
-    global _tool_context
-    _tool_context = context
+    _tool_context_var.set(context)
 
 
 def get_tool_context() -> Any:
     """Get the current tool context."""
-    if _tool_context is None:
+    try:
+        return _tool_context_var.get()
+    except LookupError:
         raise RuntimeError("Tool context not set. Call set_tool_context first.")
-    return _tool_context
 
 
 # =============================================================================

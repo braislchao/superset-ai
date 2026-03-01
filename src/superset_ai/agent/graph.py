@@ -39,6 +39,11 @@ class SupersetAgent:
         self.config = config or get_config()
         self.session = session or SessionState(session_id=str(uuid.uuid4()))
         self.client: SupersetClient | None = None
+        # Full LangChain message history preserved across turns.
+        # Unlike session.messages (simplified {role, content} dicts for summaries),
+        # this retains ToolMessages, AIMessages with tool_calls, etc. so the LLM
+        # has complete multi-turn context.
+        self._lc_messages: list[Any] = []
         self.graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
@@ -203,20 +208,16 @@ class SupersetAgent:
         Returns:
             The agent's text response
         """
-        # Add user message to session history
+        # Add user message to simplified session history (for summaries)
         self.session.messages.append({"role": "user", "content": user_message})
         
-        # Convert full session history to LangChain message objects
-        history_messages = []
-        for msg in self.session.messages:
-            if msg["role"] == "user":
-                history_messages.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                history_messages.append(AIMessage(content=msg["content"]))
+        # Add user message to the full LangChain message history
+        self._lc_messages.append(HumanMessage(content=user_message))
         
-        # Build initial state with full conversation history
+        # Build initial state with the full message history (includes
+        # ToolMessages, AIMessages with tool_calls, etc. from prior turns)
         initial_state: AgentState = {
-            "messages": history_messages,
+            "messages": list(self._lc_messages),
             "user_request": user_message,
             "superset_context": self.session.superset_context,
             "session": self.session,
@@ -227,14 +228,18 @@ class SupersetAgent:
         try:
             result = await self.graph.ainvoke(initial_state)
             
-            # Extract response
-            messages = result.get("messages", [])
-            if messages:
-                last_message = messages[-1]
+            # Preserve the full message list for next turn
+            result_messages = result.get("messages", [])
+            if result_messages:
+                self._lc_messages = list(result_messages)
+            
+            # Extract text response from the last AI message
+            if result_messages:
+                last_message = result_messages[-1]
                 if isinstance(last_message, AIMessage):
                     response = last_message.content
                     
-                    # Add to session history
+                    # Add to simplified session history (for summaries)
                     self.session.messages.append({
                         "role": "assistant",
                         "content": response,
