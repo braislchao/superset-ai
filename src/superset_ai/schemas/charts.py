@@ -130,9 +130,10 @@ class ChartParams(BaseSchema):
     # Filters
     adhoc_filters: list[dict[str, Any]] = Field(default_factory=list)
     
-    # Display settings
+    # Ordering
     row_limit: int = 1000
-    order_desc: bool = True
+    order_desc: bool | None = None
+    timeseries_limit_metric: str | dict[str, Any] | None = None
     
     # Chart-specific options (varies by viz_type)
     show_legend: bool = True
@@ -290,6 +291,7 @@ def build_bar_chart_params(
         time_range=time_range,
         row_limit=row_limit,
         order_desc=True,
+        timeseries_limit_metric=metrics[0] if metrics else None,
         show_legend=True,
         rich_tooltip=True,
         show_bar_value=True,
@@ -317,6 +319,7 @@ def build_line_chart_params(
         time_grain_sqla=time_grain,
         time_range=time_range,
         row_limit=row_limit,
+        timeseries_limit_metric=metrics[0] if metrics else None,
         show_legend=True,
     )
 
@@ -337,6 +340,7 @@ def build_pie_chart_params(
         groupby=[groupby],
         time_range=time_range,
         row_limit=row_limit,
+        timeseries_limit_metric=metric,
         show_legend=True,
         legendType="scroll",
         legendOrientation="top",
@@ -459,6 +463,7 @@ def build_area_chart_params(
         time_grain_sqla=time_grain,
         time_range=time_range,
         row_limit=row_limit,
+        timeseries_limit_metric=metrics[0] if metrics else None,
         show_legend=True,
         stacked_style="stack" if stacked else None,
     )
@@ -511,6 +516,7 @@ def build_timeseries_bar_chart_params(
         time_grain_sqla=time_grain,
         time_range=time_range,
         row_limit=row_limit,
+        timeseries_limit_metric=metrics[0] if metrics else None,
         show_legend=True,
         rich_tooltip=True,
         bar_stacked=stacked,
