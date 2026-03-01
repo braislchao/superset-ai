@@ -2,16 +2,19 @@
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from superset_ai.schemas.dashboards import (
     DashboardCreate,
     DashboardDetail,
     DashboardInfo,
     DashboardUpdate,
+    _add_charts_to_position,
+    _remove_chart_from_position,
     generate_dashboard_metadata,
     generate_grid_layout,
     generate_position_json,
+    generate_tabbed_layout,
 )
 
 if TYPE_CHECKING:
@@ -117,6 +120,7 @@ class DashboardService:
         layout: str = "vertical",
         columns: int = 2,
         published: bool = False,
+        color_scheme: str = "supersetColors",
     ) -> DashboardDetail:
         """
         Create a dashboard with charts arranged in a layout.
@@ -127,6 +131,7 @@ class DashboardService:
             layout: Layout type ("vertical" or "grid")
             columns: Number of columns for grid layout
             published: Whether to publish the dashboard
+            color_scheme: Color scheme name (e.g. "supersetColors", "d3Category10")
         
         Returns:
             Created dashboard details
@@ -138,7 +143,9 @@ class DashboardService:
             position_json = generate_position_json(chart_ids)
         
         # Generate metadata
-        json_metadata = generate_dashboard_metadata(chart_ids)
+        json_metadata = generate_dashboard_metadata(
+            chart_ids, color_scheme=color_scheme
+        )
         
         spec = DashboardCreate(
             dashboard_title=title,
@@ -155,44 +162,86 @@ class DashboardService:
         
         return dashboard
 
+    async def create_tabbed_dashboard(
+        self,
+        *,
+        title: str,
+        tabs: dict[str, list[int]],
+        published: bool = False,
+        color_scheme: str = "supersetColors",
+    ) -> DashboardDetail:
+        """
+        Create a dashboard with a tabbed layout.
+
+        Args:
+            title: Dashboard title
+            tabs: Mapping of tab label to list of chart IDs.
+                  Example: ``{"Overview": [1, 2], "Details": [3]}``
+            published: Whether to publish the dashboard
+            color_scheme: Color scheme name
+
+        Returns:
+            Created dashboard details
+        """
+        position_json = generate_tabbed_layout(tabs)
+
+        # Collect all chart IDs across tabs
+        all_chart_ids: list[int] = []
+        for chart_ids in tabs.values():
+            all_chart_ids.extend(chart_ids)
+
+        json_metadata = generate_dashboard_metadata(
+            all_chart_ids, color_scheme=color_scheme
+        )
+
+        spec = DashboardCreate(
+            dashboard_title=title,
+            position_json=position_json,
+            json_metadata=json_metadata,
+            published=published,
+        )
+
+        dashboard = await self.create_dashboard(spec)
+
+        # Associate each chart with the new dashboard
+        for chart_id in all_chart_ids:
+            await self._associate_chart_with_dashboard(chart_id, dashboard.id)
+
+        return dashboard
+
     async def add_charts_to_dashboard(
         self,
         dashboard_id: int,
         chart_ids: list[int],
+        *,
+        tab_label: str | None = None,
     ) -> DashboardDetail:
         """
         Add charts to an existing dashboard.
         
-        Merges new charts with existing layout and updates chart-dashboard
-        associations on both sides.
+        Preserves the existing layout structure (including tabs) and appends
+        new charts.  If the dashboard uses tabs, ``tab_label`` determines
+        which tab receives the new charts (defaults to the first tab).
         """
         # Get current dashboard
         dashboard = await self.get_dashboard(dashboard_id)
         
-        # Get existing chart IDs from position
+        # Work with the existing position in-place (tab-aware)
         existing_position = dashboard.get_position()
-        existing_chart_ids = self._extract_chart_ids(existing_position)
+        _add_charts_to_position(
+            existing_position, chart_ids, tab_label=tab_label
+        )
         
-        # Combine with new charts (preserve order, avoid duplicates)
-        all_chart_ids = list(existing_chart_ids)
-        for chart_id in chart_ids:
-            if chart_id not in all_chart_ids:
-                all_chart_ids.append(chart_id)
-        
-        # Regenerate layout
-        position_json = generate_position_json(all_chart_ids)
-        json_metadata = generate_dashboard_metadata(all_chart_ids)
+        position_json = json.dumps(existing_position)
         
         spec = DashboardUpdate(
             position_json=position_json,
-            json_metadata=json_metadata,
         )
         
         # Update dashboard layout
         result = await self.update_dashboard(dashboard_id, spec)
         
         # Also update each chart to associate it with this dashboard
-        # This is required for Superset to properly show the chart in the dashboard
         for chart_id in chart_ids:
             await self._associate_chart_with_dashboard(chart_id, dashboard_id)
         
@@ -230,24 +279,21 @@ class DashboardService:
         """
         Remove a chart from a dashboard.
         
-        Updates both the dashboard layout and the chart's dashboard associations.
+        Preserves the existing layout structure (including tabs) and removes
+        only the specified chart. Updates both the dashboard layout and the
+        chart's dashboard associations.
         """
         # Get current dashboard
         dashboard = await self.get_dashboard(dashboard_id)
         
-        # Get existing chart IDs and remove the target
+        # Work with the existing position in-place (tab-aware)
         existing_position = dashboard.get_position()
-        existing_chart_ids = self._extract_chart_ids(existing_position)
+        _remove_chart_from_position(existing_position, chart_id)
         
-        remaining_chart_ids = [cid for cid in existing_chart_ids if cid != chart_id]
-        
-        # Regenerate layout
-        position_json = generate_position_json(remaining_chart_ids)
-        json_metadata = generate_dashboard_metadata(remaining_chart_ids)
+        position_json = json.dumps(existing_position)
         
         spec = DashboardUpdate(
             position_json=position_json,
-            json_metadata=json_metadata,
         )
         
         result = await self.update_dashboard(dashboard_id, spec)
@@ -277,6 +323,61 @@ class DashboardService:
             remaining_dashboard_ids = [d_id for d_id in existing_dashboard_ids if d_id != dashboard_id]
             logger.info("Disassociating chart %d from dashboard %d", chart_id, dashboard_id)
             await self.client.put(f"/chart/{chart_id}", json={"dashboards": remaining_dashboard_ids})
+
+    # =========================================================================
+    # Native filter methods
+    # =========================================================================
+
+    async def add_native_filter(
+        self,
+        dashboard_id: int,
+        filter_config: dict[str, Any],
+    ) -> DashboardDetail:
+        """
+        Add a native filter to a dashboard.
+
+        The filter configuration dict (from ``build_native_filter``) is
+        appended to ``json_metadata.native_filter_configuration``.
+        """
+        dashboard = await self.get_dashboard(dashboard_id)
+        metadata = dashboard.get_metadata()
+
+        filters = metadata.get("native_filter_configuration", [])
+        filters.append(filter_config)
+        metadata["native_filter_configuration"] = filters
+
+        spec = DashboardUpdate(json_metadata=json.dumps(metadata))
+        return await self.update_dashboard(dashboard_id, spec)
+
+    async def remove_native_filter(
+        self,
+        dashboard_id: int,
+        filter_id: str,
+    ) -> DashboardDetail:
+        """
+        Remove a native filter from a dashboard by its filter ID.
+        """
+        dashboard = await self.get_dashboard(dashboard_id)
+        metadata = dashboard.get_metadata()
+
+        filters = metadata.get("native_filter_configuration", [])
+        metadata["native_filter_configuration"] = [
+            f for f in filters if f.get("id") != filter_id
+        ]
+
+        spec = DashboardUpdate(json_metadata=json.dumps(metadata))
+        return await self.update_dashboard(dashboard_id, spec)
+
+    async def list_native_filters(
+        self,
+        dashboard_id: int,
+    ) -> list[dict[str, Any]]:
+        """
+        List all native filters on a dashboard.
+        """
+        dashboard = await self.get_dashboard(dashboard_id)
+        metadata = dashboard.get_metadata()
+        return metadata.get("native_filter_configuration", [])
 
     async def find_by_title(self, title: str) -> DashboardInfo | None:
         """

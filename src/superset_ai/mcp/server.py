@@ -853,6 +853,7 @@ async def update_dashboard(
     css: str | None = None,
     published: bool | None = None,
     owners: list[int] | None = None,
+    color_scheme: str | None = None,
 ) -> dict[str, Any]:
     """Update an existing dashboard's metadata.
 
@@ -865,6 +866,10 @@ async def update_dashboard(
         css: Custom CSS.
         published: Whether the dashboard is published.
         owners: List of owner user IDs.
+        color_scheme: Color scheme name. Options: supersetColors,
+            d3Category10, d3Category20, d3Category20b, d3Category20c,
+            googleCategory10c, googleCategory20c, bnbColors, lyftColors,
+            echarts4Colors, echarts5Colors, presetColors.
     """
     _, dash_svc, _, _ = await _get_services()
     return await dashboard_ops.update_dashboard(
@@ -874,6 +879,7 @@ async def update_dashboard(
         css=css,
         published=published,
         owners=owners,
+        color_scheme=color_scheme,
     )
 
 
@@ -883,6 +889,7 @@ async def create_dashboard(
     title: str,
     chart_ids: list[int],
     layout: Literal["vertical", "grid"] = "vertical",
+    color_scheme: str = "supersetColors",
 ) -> dict[str, Any]:
     """Create a dashboard containing multiple charts.
 
@@ -890,10 +897,41 @@ async def create_dashboard(
         title: Dashboard title.
         chart_ids: List of chart IDs to include.
         layout: Layout type ("vertical" stacks charts, "grid" uses columns).
+        color_scheme: Color scheme name. Options: supersetColors (default),
+            d3Category10, d3Category20, d3Category20b, d3Category20c,
+            googleCategory10c, googleCategory20c, bnbColors, lyftColors,
+            echarts4Colors, echarts5Colors, presetColors.
     """
     _, dash_svc, _, _ = await _get_services()
     return await dashboard_ops.create_dashboard(
-        dash_svc, title, chart_ids, layout
+        dash_svc, title, chart_ids, layout, color_scheme
+    )
+
+
+@mcp.tool(tags={"dashboards"})
+@_handle_errors
+async def create_tabbed_dashboard(
+    title: str,
+    tabs: dict[str, list[int]],
+    color_scheme: str = "supersetColors",
+) -> dict[str, Any]:
+    """Create a dashboard with a tabbed layout.
+
+    Charts are organized into named tabs. Each tab shows its charts
+    stacked vertically.
+
+    Args:
+        title: Dashboard title.
+        tabs: Mapping of tab label to list of chart IDs.
+              Example: {"Overview": [1, 2], "Details": [3, 4, 5]}
+        color_scheme: Color scheme name. Options: supersetColors (default),
+            d3Category10, d3Category20, d3Category20b, d3Category20c,
+            googleCategory10c, googleCategory20c, bnbColors, lyftColors,
+            echarts4Colors, echarts5Colors, presetColors.
+    """
+    _, dash_svc, _, _ = await _get_services()
+    return await dashboard_ops.create_tabbed_dashboard(
+        dash_svc, title, tabs, color_scheme
     )
 
 
@@ -902,16 +940,23 @@ async def create_dashboard(
 async def add_chart_to_dashboard(
     dashboard_id: int,
     chart_ids: list[int],
+    tab_label: str | None = None,
 ) -> dict[str, Any]:
     """Add charts to an existing dashboard.
+
+    If the dashboard uses tabs, the charts are added to the specified tab.
+    If no tab_label is provided, charts are added to the first tab.
+    If the dashboard has no tabs, charts are appended as new rows.
 
     Args:
         dashboard_id: ID of the dashboard to update.
         chart_ids: List of chart IDs to add.
+        tab_label: Optional tab label to add the charts to. If the tab
+            doesn't exist, a new tab is created with this name.
     """
     _, dash_svc, _, _ = await _get_services()
     return await dashboard_ops.add_chart_to_dashboard(
-        dash_svc, dashboard_id, chart_ids
+        dash_svc, dashboard_id, chart_ids, tab_label=tab_label
     )
 
 
@@ -933,6 +978,95 @@ async def remove_chart_from_dashboard(
     return await dashboard_ops.remove_chart_from_dashboard(
         dash_svc, dashboard_id, chart_id
     )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard filter tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(tags={"dashboards", "filters"})
+@_handle_errors
+async def add_filter_to_dashboard(
+    dashboard_id: int,
+    name: str,
+    filter_type: str = "filter_select",
+    dataset_id: int | None = None,
+    column: str | None = None,
+    exclude_chart_ids: list[int] | None = None,
+    multi_select: bool = True,
+    default_to_first_item: bool = False,
+    description: str = "",
+) -> dict[str, Any]:
+    """Add a native filter to a dashboard.
+
+    Filters let dashboard viewers interactively filter the displayed data.
+
+    Args:
+        dashboard_id: ID of the dashboard.
+        name: Display name for the filter.
+        filter_type: One of "filter_select" (dropdown), "filter_range"
+            (numeric slider), "filter_time" (time range picker),
+            "filter_timecolumn" (temporal column selector),
+            "filter_timegrain" (time grain selector).
+        dataset_id: Dataset ID. Required for all types except "filter_time".
+        column: Column name. Required for all types except "filter_time".
+        exclude_chart_ids: Chart IDs to exclude from the filter scope.
+        multi_select: Allow multiple values (filter_select only).
+        default_to_first_item: Pre-select the first value.
+        description: Optional description.
+    """
+    _, dash_svc, _, _ = await _get_services()
+    return await dashboard_ops.add_filter_to_dashboard(
+        dash_svc, dashboard_id,
+        name=name,
+        filter_type=filter_type,
+        dataset_id=dataset_id,
+        column=column,
+        exclude_chart_ids=exclude_chart_ids,
+        multi_select=multi_select,
+        default_to_first_item=default_to_first_item,
+        description=description,
+    )
+
+
+@mcp.tool(tags={"dashboards", "filters"})
+@_handle_errors
+async def remove_filter_from_dashboard(
+    dashboard_id: int,
+    filter_id: str,
+) -> dict[str, Any]:
+    """Remove a native filter from a dashboard.
+
+    Args:
+        dashboard_id: ID of the dashboard.
+        filter_id: The filter ID (e.g. "NATIVE_FILTER-abc12345").
+            Use list_dashboard_filters to find filter IDs.
+    """
+    _, dash_svc, _, _ = await _get_services()
+    return await dashboard_ops.remove_filter_from_dashboard(
+        dash_svc, dashboard_id, filter_id
+    )
+
+
+@mcp.tool(
+    annotations={"readOnlyHint": True},
+    tags={"dashboards", "filters"},
+)
+@_handle_errors
+async def list_dashboard_filters(
+    dashboard_id: int,
+) -> list[dict[str, Any]]:
+    """List all native filters on a dashboard.
+
+    Args:
+        dashboard_id: ID of the dashboard.
+
+    Returns a list of filters with their IDs, names, types, columns,
+    and dataset IDs.
+    """
+    _, dash_svc, _, _ = await _get_services()
+    return await dashboard_ops.list_dashboard_filters(dash_svc, dashboard_id)
 
 
 @mcp.tool(
