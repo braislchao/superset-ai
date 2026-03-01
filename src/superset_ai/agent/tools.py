@@ -307,6 +307,357 @@ async def create_metric_chart(
     return result
 
 
+@tool
+async def create_area_chart(
+    title: str,
+    dataset_id: int,
+    metrics: list[str],
+    time_column: str,
+    dimensions: list[str] | None = None,
+    time_grain: str = "P1D",
+    time_range: str = "Last 30 days",
+    stacked: bool = True,
+) -> dict[str, Any]:
+    """
+    Create an area chart (filled line chart).
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metrics: List of metrics to plot
+        time_column: Column to use for x-axis time
+        dimensions: Optional grouping columns for stacked areas
+        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
+        time_range: Time filter
+        stacked: Whether to stack the areas (default True)
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_area_chart(
+        ctx.charts, title, dataset_id, metrics, time_column,
+        dimensions, time_grain, time_range, stacked,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_big_number_trendline_chart(
+    title: str,
+    dataset_id: int,
+    metric: str,
+    time_column: str,
+    time_grain: str = "P1D",
+    time_range: str = "Last 30 days",
+) -> dict[str, Any]:
+    """
+    Create a big number KPI with a trendline / sparkline.
+
+    Unlike the plain big number chart, this variant requires a time column
+    and renders a small trend line below the headline metric.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metric: The metric to display (e.g., "COUNT(*)", "SUM(revenue)")
+        time_column: Time column for the trendline
+        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
+        time_range: Time filter
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_big_number_trendline_chart(
+        ctx.charts, title, dataset_id, metric, time_column,
+        time_grain, time_range,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_timeseries_bar_chart(
+    title: str,
+    dataset_id: int,
+    metrics: list[str],
+    time_column: str,
+    dimensions: list[str] | None = None,
+    time_grain: str = "P1D",
+    time_range: str = "Last 30 days",
+    stacked: bool = False,
+) -> dict[str, Any]:
+    """
+    Create a timeseries bar chart (ECharts).
+
+    Like a regular bar chart but plotted over a time axis. Supports stacking.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metrics: List of metrics to plot
+        time_column: Time column for the x-axis
+        dimensions: Optional grouping columns for stacked bars
+        time_grain: Time granularity (P1D=daily, P1W=weekly, P1M=monthly)
+        time_range: Time filter
+        stacked: Whether to stack the bars (default False)
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_timeseries_bar_chart(
+        ctx.charts, title, dataset_id, metrics, time_column,
+        dimensions, time_grain, time_range, stacked,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_bubble_chart(
+    title: str,
+    dataset_id: int,
+    x_metric: str,
+    y_metric: str,
+    size_metric: str,
+    series_column: str,
+    entity_column: str | None = None,
+    time_range: str = "No filter",
+    max_bubble_size: int = 25,
+) -> dict[str, Any]:
+    """
+    Create a bubble chart visualization.
+
+    Three metrics are mapped to x-position, y-position, and bubble size.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        x_metric: Metric for x-axis position
+        y_metric: Metric for y-axis position
+        size_metric: Metric for bubble size
+        series_column: Column for colouring / grouping bubbles
+        entity_column: Column for bubble labels (defaults to series_column)
+        time_range: Time filter
+        max_bubble_size: Maximum bubble diameter in pixels
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_bubble_chart(
+        ctx.charts, title, dataset_id, x_metric, y_metric,
+        size_metric, series_column, entity_column, time_range,
+        max_bubble_size,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_funnel_chart(
+    title: str,
+    dataset_id: int,
+    metric: str,
+    dimension: str,
+    time_range: str = "No filter",
+    sort_by_metric: bool = True,
+) -> dict[str, Any]:
+    """
+    Create a funnel chart visualization.
+
+    Funnels show sequential stages with decreasing values.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metric: Single metric for funnel stage values
+        dimension: Column representing funnel stages
+        time_range: Time filter
+        sort_by_metric: Whether to sort stages by metric value
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_funnel_chart(
+        ctx.charts, title, dataset_id, metric, dimension,
+        time_range, sort_by_metric,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_gauge_chart(
+    title: str,
+    dataset_id: int,
+    metric: str,
+    min_val: float = 0,
+    max_val: float = 100,
+    time_range: str = "No filter",
+) -> dict[str, Any]:
+    """
+    Create a gauge / speedometer chart.
+
+    Displays a single metric as a position on an arc between min and max.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metric: The metric to display
+        min_val: Minimum value on the gauge scale
+        max_val: Maximum value on the gauge scale
+        time_range: Time filter
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_gauge_chart(
+        ctx.charts, title, dataset_id, metric, min_val, max_val, time_range,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_treemap_chart(
+    title: str,
+    dataset_id: int,
+    metric: str,
+    dimensions: list[str],
+    time_range: str = "No filter",
+) -> dict[str, Any]:
+    """
+    Create a treemap visualization.
+
+    Treemaps display hierarchical data as nested rectangles whose area
+    is proportional to the metric value.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metric: Metric for rectangle area sizing
+        dimensions: Dimension columns for hierarchy levels
+        time_range: Time filter
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_treemap_chart(
+        ctx.charts, title, dataset_id, metric, dimensions, time_range,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_histogram_chart(
+    title: str,
+    dataset_id: int,
+    column: str,
+    dimensions: list[str] | None = None,
+    num_bins: int = 10,
+    normalized: bool = False,
+    time_range: str = "No filter",
+) -> dict[str, Any]:
+    """
+    Create a histogram visualization.
+
+    Histograms show the distribution of a single numeric column.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        column: Numeric column whose distribution to plot
+        dimensions: Optional grouping for overlaid histograms
+        num_bins: Number of bins
+        normalized: Whether to normalize the histogram
+        time_range: Time filter
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_histogram_chart(
+        ctx.charts, title, dataset_id, column, dimensions,
+        num_bins, normalized, time_range,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_box_plot_chart(
+    title: str,
+    dataset_id: int,
+    metrics: list[str],
+    dimensions: list[str],
+    time_range: str = "No filter",
+    whisker_options: str = "Tukey",
+) -> dict[str, Any]:
+    """
+    Create a box plot visualization.
+
+    Box plots display the statistical distribution (median, quartiles,
+    outliers) of one or more metrics, grouped by dimensions.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metrics: Metric expressions to plot
+        dimensions: Dimension columns for grouping
+        time_range: Time filter
+        whisker_options: Whisker calculation method (Tukey, Min/max, etc.)
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_box_plot_chart(
+        ctx.charts, title, dataset_id, metrics, dimensions,
+        time_range, whisker_options,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+@tool
+async def create_heatmap_chart(
+    title: str,
+    dataset_id: int,
+    metric: str,
+    x_column: str,
+    y_column: str,
+    time_range: str = "No filter",
+    linear_color_scheme: str = "blue_white_yellow",
+    normalize_across: str | None = None,
+    show_values: bool = False,
+) -> dict[str, Any]:
+    """
+    Create a heatmap visualization.
+
+    Heatmaps display a 2D grid coloured by a metric value at each
+    (x, y) intersection.
+
+    Args:
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        metric: Metric for cell colour intensity
+        x_column: Column for x-axis
+        y_column: Column for y-axis
+        time_range: Time filter
+        linear_color_scheme: Colour scheme name
+        normalize_across: Normalisation axis (None, "heatmap", "x", "y")
+        show_values: Whether to display values in cells
+
+    Returns the created chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.create_heatmap_chart(
+        ctx.charts, title, dataset_id, metric, x_column, y_column,
+        time_range, linear_color_scheme, normalize_across, show_values,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
 # =============================================================================
 # Chart Management Tools
 # =============================================================================
@@ -322,6 +673,59 @@ async def list_all_charts() -> list[dict[str, Any]]:
     """
     ctx = get_tool_context()
     return await chart_ops.list_all_charts(ctx.charts)
+
+
+@tool
+async def get_chart(chart_id: int) -> dict[str, Any]:
+    """
+    Get detailed information about a single chart.
+
+    Args:
+        chart_id: The ID of the chart
+
+    Returns chart details including title, type, datasource, params,
+    and associated dashboards.
+    """
+    ctx = get_tool_context()
+    return await chart_ops.get_chart(ctx.charts, chart_id)
+
+
+@tool
+async def update_chart(
+    chart_id: int,
+    title: str | None = None,
+    description: str | None = None,
+    cache_timeout: int | None = None,
+    owners: list[int] | None = None,
+    dashboards: list[int] | None = None,
+) -> dict[str, Any]:
+    """
+    Update an existing chart's metadata.
+
+    Only the provided fields are updated; omitted fields are left unchanged.
+
+    Args:
+        chart_id: The ID of the chart to update
+        title: New chart title
+        description: New chart description
+        cache_timeout: Cache timeout in seconds
+        owners: List of owner user IDs
+        dashboards: List of dashboard IDs to associate
+
+    Returns updated chart information.
+    """
+    ctx = get_tool_context()
+    result = await chart_ops.update_chart(
+        ctx.charts, chart_id,
+        title=title,
+        description=description,
+        cache_timeout=cache_timeout,
+        owners=owners,
+        dashboards=dashboards,
+    )
+    if title:
+        ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
 
 
 @tool
@@ -353,6 +757,81 @@ async def list_all_dashboards() -> list[dict[str, Any]]:
     """
     ctx = get_tool_context()
     return await dashboard_ops.list_all_dashboards(ctx.dashboards)
+
+
+@tool
+async def get_dashboard(dashboard_id: int) -> dict[str, Any]:
+    """
+    Get detailed information about a single dashboard.
+
+    Args:
+        dashboard_id: The ID of the dashboard
+
+    Returns dashboard details including title, charts, published status,
+    and layout information.
+    """
+    ctx = get_tool_context()
+    return await dashboard_ops.get_dashboard(ctx.dashboards, dashboard_id)
+
+
+@tool
+async def update_dashboard(
+    dashboard_id: int,
+    title: str | None = None,
+    slug: str | None = None,
+    css: str | None = None,
+    published: bool | None = None,
+    owners: list[int] | None = None,
+) -> dict[str, Any]:
+    """
+    Update an existing dashboard's metadata.
+
+    Only the provided fields are updated; omitted fields are left unchanged.
+
+    Args:
+        dashboard_id: The ID of the dashboard to update
+        title: New dashboard title
+        slug: New URL-friendly slug
+        css: Custom CSS
+        published: Whether the dashboard is published
+        owners: List of owner user IDs
+
+    Returns updated dashboard information.
+    """
+    ctx = get_tool_context()
+    result = await dashboard_ops.update_dashboard(
+        ctx.dashboards, dashboard_id,
+        title=title,
+        slug=slug,
+        css=css,
+        published=published,
+        owners=owners,
+    )
+    if title:
+        ctx.session.add_asset("dashboard", result["id"], result["title"])
+    return result
+
+
+@tool
+async def remove_chart_from_dashboard(
+    dashboard_id: int,
+    chart_id: int,
+) -> dict[str, Any]:
+    """
+    Remove a chart from a dashboard.
+
+    The chart is NOT deleted — it is only removed from the dashboard layout.
+
+    Args:
+        dashboard_id: ID of the dashboard to update
+        chart_id: ID of the chart to remove
+
+    Returns updated dashboard information.
+    """
+    ctx = get_tool_context()
+    return await dashboard_ops.remove_chart_from_dashboard(
+        ctx.dashboards, dashboard_id, chart_id
+    )
 
 
 @tool
@@ -447,18 +926,34 @@ ALL_TOOLS = [
     list_existing_datasets,
     # Datasets
     find_or_create_dataset,
-    # Charts
+    # Charts — original types
     list_all_charts,
+    get_chart,
     create_bar_chart,
     create_line_chart,
     create_pie_chart,
     create_table_chart,
     create_metric_chart,
+    # Charts — new types
+    create_area_chart,
+    create_big_number_trendline_chart,
+    create_timeseries_bar_chart,
+    create_bubble_chart,
+    create_funnel_chart,
+    create_gauge_chart,
+    create_treemap_chart,
+    create_histogram_chart,
+    create_box_plot_chart,
+    create_heatmap_chart,
+    update_chart,
     delete_chart,
     # Dashboards
     list_all_dashboards,
+    get_dashboard,
     create_dashboard,
     add_chart_to_dashboard,
+    remove_chart_from_dashboard,
+    update_dashboard,
     delete_dashboard,
     # Bulk operations
     delete_all_charts_and_dashboards,

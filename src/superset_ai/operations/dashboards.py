@@ -1,4 +1,4 @@
-"""Dashboard operations — create, list, delete dashboards and bulk ops."""
+"""Dashboard operations — create, list, get, update, delete dashboards and bulk ops."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from superset_ai.api.charts import ChartService
 from superset_ai.api.dashboards import DashboardService
+from superset_ai.schemas.dashboards import DashboardUpdate
 
 
 async def list_all_dashboards(
@@ -70,6 +71,96 @@ async def add_chart_to_dashboard(
         "title": dashboard.dashboard_title,
         "url": f"/superset/dashboard/{dashboard.id}/",
         "message": f"Added {len(chart_ids)} chart(s) to dashboard",
+    }
+
+
+async def get_dashboard(
+    dash_svc: DashboardService,
+    dashboard_id: int,
+) -> dict[str, Any]:
+    """Get detailed information about a single dashboard.
+
+    Returns:
+        Dict with ``id``, ``title``, ``url``, ``published``, ``charts``,
+        ``css``, and ``slug``.
+    """
+    dashboard = await dash_svc.get_dashboard(dashboard_id)
+    # Extract chart IDs from position_json
+    position = dashboard.get_position()
+    chart_ids: list[int] = []
+    for key, value in position.items():
+        if isinstance(value, dict) and value.get("type") == "CHART":
+            meta = value.get("meta", {})
+            chart_id = meta.get("chartId")
+            if chart_id:
+                chart_ids.append(chart_id)
+
+    return {
+        "id": dashboard.id,
+        "title": dashboard.dashboard_title,
+        "url": f"/superset/dashboard/{dashboard.id}/",
+        "published": dashboard.published,
+        "slug": dashboard.slug,
+        "css": dashboard.css,
+        "chart_ids": chart_ids,
+        "charts": dashboard.charts,
+    }
+
+
+async def update_dashboard(
+    dash_svc: DashboardService,
+    dashboard_id: int,
+    *,
+    title: str | None = None,
+    slug: str | None = None,
+    css: str | None = None,
+    published: bool | None = None,
+    owners: list[int] | None = None,
+) -> dict[str, Any]:
+    """Update an existing dashboard's metadata.
+
+    Only the provided fields are updated; ``None`` values are skipped.
+
+    Returns:
+        Dict with ``id``, ``title``, ``url``, and ``message``.
+    """
+    spec = DashboardUpdate(
+        dashboard_title=title,
+        slug=slug,
+        css=css,
+        published=published,
+        owners=owners,
+    )
+    dashboard = await dash_svc.update_dashboard(dashboard_id, spec)
+    return {
+        "id": dashboard.id,
+        "title": dashboard.dashboard_title,
+        "url": f"/superset/dashboard/{dashboard.id}/",
+        "message": f"Updated dashboard '{dashboard.dashboard_title}' (ID: {dashboard.id})",
+    }
+
+
+async def remove_chart_from_dashboard(
+    dash_svc: DashboardService,
+    dashboard_id: int,
+    chart_id: int,
+) -> dict[str, Any]:
+    """Remove a chart from a dashboard.
+
+    Updates both the dashboard layout and chart-dashboard associations.
+
+    Returns:
+        Dict with ``id``, ``title``, ``url``, and ``message``.
+    """
+    dashboard = await dash_svc.remove_chart_from_dashboard(
+        dashboard_id=dashboard_id,
+        chart_id=chart_id,
+    )
+    return {
+        "id": dashboard.id,
+        "title": dashboard.dashboard_title,
+        "url": f"/superset/dashboard/{dashboard.id}/",
+        "message": f"Removed chart {chart_id} from dashboard '{dashboard.dashboard_title}'",
     }
 
 
