@@ -861,8 +861,9 @@ class ChartService:
         
         for chart in charts:
             if chart.viz_type == viz_type:
-                # TODO: Could add more sophisticated matching
-                # by parsing params and comparing metrics/dimensions
+                # Basic match by viz_type only; could be extended to
+                # parse params and compare metrics/dimensions for a
+                # more precise match.
                 return chart
         
         return None
