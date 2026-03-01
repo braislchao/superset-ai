@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
 from rich.console import Console
@@ -14,6 +14,9 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from superset_ai import __version__
+
+if TYPE_CHECKING:
+    from superset_ai.agent.graph import SupersetAgent
 
 app = typer.Typer(
     name="superset-ai",

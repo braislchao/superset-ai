@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import functools
 import logging
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastmcp import FastMCP
 
@@ -34,6 +34,12 @@ from superset_ai.operations import charts as chart_ops
 from superset_ai.operations import dashboards as dashboard_ops
 from superset_ai.operations import datasets as dataset_ops
 from superset_ai.operations import discovery as discovery_ops
+
+if TYPE_CHECKING:
+    from superset_ai.api.charts import ChartService
+    from superset_ai.api.dashboards import DashboardService
+    from superset_ai.api.databases import DatabaseService
+    from superset_ai.api.datasets import DatasetService
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +64,18 @@ _dataset_svc = None
 _database_svc = None
 
 
-async def _get_services():
+async def _get_services() -> tuple[
+    ChartService, DashboardService, DatasetService, DatabaseService
+]:
     """Lazily initialize SupersetClient and all service instances."""
     global _client, _chart_svc, _dashboard_svc, _dataset_svc, _database_svc
 
     if _client is None:
-        from superset_ai.api.charts import ChartService
+        from superset_ai.api.charts import ChartService as _CS
         from superset_ai.api.client import SupersetClient
-        from superset_ai.api.dashboards import DashboardService
-        from superset_ai.api.databases import DatabaseService
-        from superset_ai.api.datasets import DatasetService
+        from superset_ai.api.dashboards import DashboardService as _DS
+        from superset_ai.api.databases import DatabaseService as _DBS
+        from superset_ai.api.datasets import DatasetService as _DSS
         from superset_ai.core.config import SupersetConfig
 
         config = SupersetConfig()
@@ -75,15 +83,19 @@ async def _get_services():
         # Authenticate eagerly so first tool call doesn't silently fail
         await _client.auth.get_valid_session()
 
-        _chart_svc = ChartService(_client)
-        _dashboard_svc = DashboardService(_client)
-        _dataset_svc = DatasetService(_client)
-        _database_svc = DatabaseService(_client)
+        _chart_svc = _CS(_client)
+        _dashboard_svc = _DS(_client)
+        _dataset_svc = _DSS(_client)
+        _database_svc = _DBS(_client)
 
         logger.info(
             "SupersetAI MCP: connected to %s", config.superset_base_url
         )
 
+    assert _chart_svc is not None
+    assert _dashboard_svc is not None
+    assert _dataset_svc is not None
+    assert _database_svc is not None
     return _chart_svc, _dashboard_svc, _dataset_svc, _database_svc
 
 

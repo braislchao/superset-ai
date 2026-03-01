@@ -273,7 +273,7 @@ class ChartListParams(BaseSchema):
 
 def build_bar_chart_params(
     datasource_id: int,
-    metrics: list[str],
+    metrics: list[str | dict[str, Any]],
     groupby: list[str],
     *,
     time_column: str | None = None,
@@ -299,7 +299,7 @@ def build_bar_chart_params(
 
 def build_line_chart_params(
     datasource_id: int,
-    metrics: list[str],
+    metrics: list[str | dict[str, Any]],
     time_column: str,
     *,
     groupby: list[str] | None = None,
@@ -323,7 +323,7 @@ def build_line_chart_params(
 
 def build_pie_chart_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     groupby: str,
     *,
     time_range: str = "No filter",
@@ -347,7 +347,7 @@ def build_table_params(
     datasource_id: int,
     columns: list[str],
     *,
-    metrics: list[str] | None = None,
+    metrics: list[str | dict[str, Any]] | None = None,
     groupby: list[str] | None = None,
     time_range: str = "No filter",
     row_limit: int = 1000,
@@ -373,7 +373,7 @@ def build_table_params(
 
 def build_big_number_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     *,
     time_column: str | None = None,
     time_range: str = "No filter",
@@ -429,7 +429,7 @@ def build_adhoc_metric(
 
 def build_area_chart_params(
     datasource_id: int,
-    metrics: list[str],
+    metrics: list[str | dict[str, Any]],
     time_column: str,
     *,
     groupby: list[str] | None = None,
@@ -466,7 +466,7 @@ def build_area_chart_params(
 
 def build_big_number_with_trendline_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     time_column: str,
     *,
     time_grain: str = "P1D",
@@ -489,7 +489,7 @@ def build_big_number_with_trendline_params(
 
 def build_timeseries_bar_chart_params(
     datasource_id: int,
-    metrics: list[str],
+    metrics: list[str | dict[str, Any]],
     time_column: str,
     *,
     groupby: list[str] | None = None,
@@ -552,7 +552,7 @@ def build_bubble_chart_params(
 
 def build_funnel_chart_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     groupby: str,
     *,
     time_range: str = "No filter",
@@ -577,7 +577,7 @@ def build_funnel_chart_params(
 
 def build_gauge_chart_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     *,
     min_val: float = 0,
     max_val: float = 100,
@@ -607,7 +607,7 @@ def build_gauge_chart_params(
 
 def build_treemap_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     groupby: list[str],
     *,
     time_range: str = "No filter",
@@ -666,7 +666,7 @@ def build_histogram_params(
 
 def build_box_plot_params(
     datasource_id: int,
-    metrics: list[str],
+    metrics: list[str | dict[str, Any]],
     groupby: list[str],
     *,
     time_column: str | None = None,
@@ -699,7 +699,7 @@ def build_box_plot_params(
 
 def build_heatmap_params(
     datasource_id: int,
-    metric: str,
+    metric: str | dict[str, Any],
     x_column: str,
     y_column: str,
     *,

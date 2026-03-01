@@ -4,9 +4,10 @@ import logging
 import uuid
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from superset_ai.agent.prompts import SYSTEM_PROMPT, build_session_context
@@ -46,7 +47,7 @@ class SupersetAgent:
         self._lc_messages: list[Any] = []
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> CompiledStateGraph:
         """Build the LangGraph agent graph."""
         # Initialize LLM based on provider
         llm_kwargs = {
@@ -79,7 +80,7 @@ class SupersetAgent:
             logger.debug("agent_node called with %d messages", len(messages))
             for i, m in enumerate(messages):
                 msg_type = type(m).__name__
-                has_tools = hasattr(m, "tool_calls") and m.tool_calls
+                has_tools = hasattr(m, "tool_calls") and m.tool_calls  # type: ignore[union-attr]
                 logger.debug("  [%d] %s, has_tool_calls=%s", i, msg_type, has_tools)
             
             # Check if system message already exists
@@ -104,15 +105,15 @@ class SupersetAgent:
                 # Prepend to messages for this invocation
                 messages = [system_msg] + messages
                 # Also update state with the system message
-                result_messages = [system_msg]
+                result_messages: list[BaseMessage] = [system_msg]
             else:
-                result_messages = []
+                result_messages: list[BaseMessage] = []
             
             # Debug: log final messages being sent to LLM
             logger.debug("Sending %d messages to LLM", len(messages))
             for i, m in enumerate(messages):
                 msg_type = type(m).__name__
-                has_tools = hasattr(m, "tool_calls") and m.tool_calls
+                has_tools = hasattr(m, "tool_calls") and m.tool_calls  # type: ignore[union-attr]
                 logger.debug("  [%d] %s, has_tool_calls=%s", i, msg_type, has_tools)
             
             # Invoke LLM
@@ -237,7 +238,8 @@ class SupersetAgent:
             if result_messages:
                 last_message = result_messages[-1]
                 if isinstance(last_message, AIMessage):
-                    response = last_message.content
+                    content = last_message.content
+                    response = content if isinstance(content, str) else str(content)
                     
                     # Add to simplified session history (for summaries)
                     self.session.messages.append({
