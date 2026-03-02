@@ -171,7 +171,7 @@ class SupersetClient:
             headers["Authorization"] = f"Bearer {session.access_token}"
 
         # For session-based auth, apply session cookies to the client
-        if session.session_based and self.auth.session_cookies:
+        if self.auth.session_cookies:
             for name, value in self.auth.session_cookies.items():
                 self._client.cookies.set(name, value)
 

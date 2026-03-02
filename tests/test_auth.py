@@ -710,3 +710,110 @@ class TestCleanup:
     async def test_close_is_safe_when_no_clients(self, auth_manager):
         """close() should not fail if clients were never created."""
         await auth_manager.close()  # Should not raise
+
+
+# =============================================================================
+# JWT CSRF session cookie capture
+# =============================================================================
+
+
+class TestJWTSessionCookieCapture:
+    """Test that JWT auth captures session cookies set during CSRF fetch.
+
+    Superset 3.x ties the CSRF token to a server-side session via a cookie.
+    After _fetch_csrf_token(), the cookies from _client must be copied to
+    _session_cookies so that the API client can forward them on later requests.
+    """
+
+    @respx.mock
+    async def test_jwt_auth_populates_session_cookies(self, config):
+        """JWT auth should capture cookies from _client into session_cookies."""
+        jwt_token = _make_jwt()
+
+        # Session auth fails at initial CSRF (drives fallback to JWT)
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            500, json={"error": "not supported"}
+        )
+
+        # JWT login succeeds
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
+            200,
+            json={"access_token": jwt_token, "refresh_token": "r"},
+        )
+
+        # CSRF fetch succeeds and the server sets a session cookie.
+        # We mock it via a callback so we can inject cookies into _client.
+        csrf_called = False
+
+        def csrf_side_effect(request):
+            nonlocal csrf_called
+            csrf_called = True
+            resp = httpx.Response(200, json={"result": "jwt-csrf"})
+            return resp
+
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").mock(side_effect=csrf_side_effect)
+
+        # Create auth manager with its own client (so we control cookies)
+        auth = SupersetAuthManager(config)
+
+        # Pre-set a cookie on _client to simulate the server setting one
+        # during the CSRF fetch response. (respx doesn't propagate
+        # Set-Cookie headers into httpx cookies, so we seed it directly.)
+        auth._client.cookies.set("session", "fake-session-id")
+
+        session = await auth.get_valid_session()
+
+        assert session.session_based is False
+        # The session cookie must have been captured
+        assert "session" in auth.session_cookies
+        assert auth.session_cookies["session"] == "fake-session-id"
+
+        await auth.close()
+
+    @respx.mock
+    async def test_jwt_auth_captures_multiple_cookies(self, config):
+        """JWT auth should capture all cookies from _client, not just 'session'."""
+        jwt_token = _make_jwt()
+
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(500, json={"error": "fail"})
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
+            200,
+            json={"access_token": jwt_token, "refresh_token": "r"},
+        )
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "csrf-ok"}
+        )
+
+        auth = SupersetAuthManager(config)
+        auth._client.cookies.set("session", "sess-val")
+        auth._client.cookies.set("_superset_session", "extra-val")
+
+        await auth.get_valid_session()
+
+        assert auth.session_cookies["session"] == "sess-val"
+        assert auth.session_cookies["_superset_session"] == "extra-val"
+
+        await auth.close()
+
+    @respx.mock
+    async def test_jwt_auth_no_cookies_gives_empty_dict(self, config):
+        """If the server sets no cookies during JWT auth, session_cookies stays empty."""
+        jwt_token = _make_jwt()
+
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(500, json={"error": "fail"})
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
+            200,
+            json={"access_token": jwt_token, "refresh_token": "r"},
+        )
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "csrf-ok"}
+        )
+
+        auth = SupersetAuthManager(config)
+        # Don't seed any cookies on _client
+
+        await auth.get_valid_session()
+
+        assert auth.session_cookies == {}
+
+        await auth.close()

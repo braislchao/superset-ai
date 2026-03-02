@@ -299,6 +299,13 @@ class SupersetAuthManager:
         # Step 2: Get CSRF token
         csrf_token = await self._fetch_csrf_token(access_token)
 
+        # Step 2b: Capture session cookies set during CSRF fetch.
+        # Superset 3.x ties the CSRF token to a server-side session via a
+        # cookie; without forwarding this cookie, later POST/PUT/DELETE
+        # requests will fail with "CSRF session token is missing".
+        for name, value in self._client.cookies.items():
+            self._session_cookies[name] = value
+
         # Step 3: Calculate expiry
         expires_at = self._extract_expiry(access_token)
 

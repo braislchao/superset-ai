@@ -469,3 +469,101 @@ class TestContextManager:
                 assert isinstance(client, SupersetClient)
 
             mock_close.assert_awaited_once()
+
+
+# =============================================================================
+# Cookie forwarding for JWT sessions
+# =============================================================================
+
+
+class TestCookieForwardingJWT:
+    """Test that session cookies are forwarded for JWT-based auth.
+
+    Superset 3.x requires a session cookie alongside the CSRF token for
+    mutating requests. The client must forward cookies regardless of whether
+    auth is session-based or JWT-based.
+    """
+
+    @respx.mock
+    async def test_jwt_session_cookies_forwarded_on_post(self, client):
+        """POST request with JWT auth should include session cookies."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=False))
+        client.auth.session_cookies = {"session": "jwt-session-cookie"}
+
+        route = respx.post(f"{API_URL}/sqllab/execute/").respond(200, json={"result": "ok"})
+
+        await client.post("/sqllab/execute/", json={"sql": "SELECT 1"})
+
+        assert route.called
+        # Verify the cookie was set on the underlying httpx client
+        assert client._client.cookies.get("session") == "jwt-session-cookie"
+
+    @respx.mock
+    async def test_jwt_session_cookies_forwarded_on_put(self, client):
+        """PUT request with JWT auth should include session cookies."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=False))
+        client.auth.session_cookies = {"session": "jwt-sess"}
+
+        route = respx.put(f"{API_URL}/chart/1").respond(200, json={"result": "updated"})
+
+        await client.put("/chart/1", json={"slice_name": "X"})
+
+        assert route.called
+        assert client._client.cookies.get("session") == "jwt-sess"
+
+    @respx.mock
+    async def test_jwt_session_cookies_forwarded_on_delete(self, client):
+        """DELETE request with JWT auth should include session cookies."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=False))
+        client.auth.session_cookies = {"session": "jwt-del-sess"}
+
+        route = respx.delete(f"{API_URL}/chart/1").respond(200, json={"message": "ok"})
+
+        await client.delete("/chart/1")
+
+        assert route.called
+        assert client._client.cookies.get("session") == "jwt-del-sess"
+
+    @respx.mock
+    async def test_no_cookies_when_session_cookies_empty(self, client):
+        """When session_cookies is empty, no cookies should be added."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=False))
+        client.auth.session_cookies = {}
+
+        route = respx.get(f"{API_URL}/chart/").respond(200, json={"result": []})
+
+        await client.get("/chart/")
+
+        assert route.called
+        # No session cookie should be present
+        assert client._client.cookies.get("session") is None
+
+    @respx.mock
+    async def test_session_based_cookies_still_forwarded(self, client):
+        """Session-based auth cookies should still be forwarded (regression check)."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=True))
+        client.auth.session_cookies = {"session": "session-based-cookie"}
+
+        route = respx.get(f"{API_URL}/chart/").respond(200, json={"result": []})
+
+        await client.get("/chart/")
+
+        assert route.called
+        assert client._client.cookies.get("session") == "session-based-cookie"
+
+    @respx.mock
+    async def test_multiple_cookies_forwarded(self, client):
+        """All session cookies should be forwarded, not just 'session'."""
+        client.auth.get_valid_session = AsyncMock(return_value=_make_session(session_based=False))
+        client.auth.session_cookies = {
+            "session": "sess-val",
+            "_superset_session": "extra-val",
+        }
+
+        route = respx.post(f"{API_URL}/sqllab/execute/").respond(200, json={"result": "ok"})
+
+        await client.post("/sqllab/execute/", json={"sql": "SELECT 1"})
+
+        assert route.called
+        assert client._client.cookies.get("session") == "sess-val"
+        assert client._client.cookies.get("_superset_session") == "extra-val"
