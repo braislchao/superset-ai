@@ -103,10 +103,10 @@ class TestAllToolsList:
         """ALL_TOOLS should contain exactly 26 tools."""
         assert len(ALL_TOOLS) == 26
 
-    def test_all_entries_are_callable(self):
-        """Every entry in ALL_TOOLS must be callable."""
+    def test_all_entries_are_tools(self):
+        """Every entry in ALL_TOOLS must be a BaseTool (i.e. have an invoke method)."""
         for t in ALL_TOOLS:
-            assert callable(t), f"{t!r} is not callable"
+            assert hasattr(t, "invoke"), f"{t!r} is not a tool (no invoke method)"
 
     def test_no_duplicates(self):
         """ALL_TOOLS must not contain duplicate entries."""
