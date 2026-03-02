@@ -439,42 +439,5 @@ async def _list_databases(url: str | None) -> None:
         raise typer.Exit(1)
 
 
-@app.command(name="mcp")
-def mcp_server(
-    transport: str = typer.Option(
-        "stdio",
-        "--transport",
-        "-t",
-        help="MCP transport: 'stdio' or 'http'",
-    ),
-    port: int = typer.Option(
-        8000,
-        "--port",
-        "-p",
-        help="Port for HTTP transport (ignored for stdio)",
-    ),
-) -> None:
-    """
-    Start the MCP (Model Context Protocol) server.
-
-    Exposes Superset tools via MCP so any compatible client
-    (Claude Desktop, Cursor, VS Code, etc.) can use them.
-
-    Examples:
-        superset-ai mcp                    # stdio (default)
-        superset-ai mcp -t http -p 8000    # HTTP on port 8000
-    """
-    from superset_ai.mcp.server import mcp as mcp_app
-
-    if transport == "http":
-        console.print(
-            f"Starting SupersetAI MCP server on [cyan]http://0.0.0.0:{port}/mcp[/cyan]"
-        )
-        mcp_app.run(transport="http", port=port)
-    else:
-        # stdio — no console output (stdout is the MCP channel)
-        mcp_app.run(transport="stdio")
-
-
 if __name__ == "__main__":
     app()

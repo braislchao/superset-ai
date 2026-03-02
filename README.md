@@ -1,9 +1,6 @@
 # superset-ai
 
-A general-purpose Python library for managing Apache Superset via natural language. Exposes Superset operations through two integration surfaces:
-
-- **MCP server** — for Claude Desktop, Cursor, VS Code, and any MCP client
-- **LangChain/LangGraph agent** — for embedding directly in Python applications
+A Python library and LangGraph agent for managing Apache Superset via natural language.
 
 ## Features
 
@@ -40,39 +37,6 @@ superset-ai test-connection
 superset-ai chat
 ```
 
-## MCP Server
-
-Expose Superset tools via the Model Context Protocol:
-
-```bash
-# stdio transport (for Claude Desktop, Cursor, etc.)
-superset-ai mcp
-
-# HTTP transport
-superset-ai mcp -t http -p 8000
-
-# Or via fastmcp CLI
-fastmcp run superset_ai.mcp.server:mcp --transport stdio
-```
-
-### Claude Desktop / Cursor configuration
-
-```json
-{
-  "mcpServers": {
-    "superset-ai": {
-      "command": "superset-ai",
-      "args": ["mcp"],
-      "env": {
-        "SUPERSET_AI_SUPERSET_BASE_URL": "http://localhost:8088",
-        "SUPERSET_AI_SUPERSET_USERNAME": "admin",
-        "SUPERSET_AI_SUPERSET_PASSWORD": "admin"
-      }
-    }
-  }
-}
-```
-
 ## LangChain Agent
 
 Embed the Superset agent in your Python application:
@@ -102,9 +66,6 @@ superset-ai test-connection
 
 # List available databases
 superset-ai list-databases
-
-# Start MCP server
-superset-ai mcp
 ```
 
 ## Configuration
@@ -127,15 +88,12 @@ All settings use the `SUPERSET_AI_` environment variable prefix:
 ## Architecture
 
 ```
-MCP tools (mcp/server.py)  ──┐
-                              ├──→  operations/  ──→  api/  ──→  Superset REST API
-Agent tools (agent/tools.py) ─┘
+Agent tools (agent/tools.py) ──→  operations/  ──→  api/  ──→  Superset REST API
 ```
 
 - **`api/`** — HTTP client and service classes that talk to the Superset REST API
 - **`schemas/`** — Chart/dashboard payload builders and layout generators
 - **`operations/`** — Shared business logic (pure functions, no side effects)
-- **`mcp/`** — FastMCP tool wrappers with structured error handling
 - **`agent/`** — LangChain `@tool` wrappers with session caching and asset tracking
 - **`core/`** — Configuration, authentication, exceptions
 - **`cli/`** — Typer CLI application
