@@ -713,7 +713,7 @@ class TestBuildQueryContext:
         assert query["orderby"][0][1] is False  # not params.order_desc -> not True = False
 
     def test_no_orderby_when_order_desc_not_set(self):
-        """Should not include orderby when order_desc is None."""
+        """Should not include orderby when neither order_desc nor timeseries_limit_metric is set."""
         params = build_big_number_params(
             datasource_id=1,
             metric="COUNT(*)",
@@ -722,6 +722,76 @@ class TestBuildQueryContext:
         query = qc["queries"][0]
 
         assert query["orderby"] == []
+
+    def test_orderby_defaults_descending_when_order_desc_is_none(self):
+        """When timeseries_limit_metric is set but order_desc is None, default to descending."""
+        params = build_pie_chart_params(
+            datasource_id=1,
+            metric="SUM(revenue)",
+            groupby="region",
+        )
+        # Pie builder sets timeseries_limit_metric but order_desc=True now;
+        # test the query_context builder directly with order_desc=None
+        params.order_desc = None
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "SUM(revenue)"
+        # Default order_desc=True -> not True = False (ascending=False, i.e. descending)
+        assert query["orderby"][0][1] is False
+
+    def test_pie_chart_has_orderby(self):
+        """Pie chart should produce a non-empty orderby in query_context."""
+        params = build_pie_chart_params(
+            datasource_id=1,
+            metric="SUM(amount)",
+            groupby="category",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "SUM(amount)"
+
+    def test_line_chart_has_orderby(self):
+        """Line chart should produce a non-empty orderby in query_context."""
+        params = build_line_chart_params(
+            datasource_id=1,
+            metrics=["SUM(sales)"],
+            time_column="order_date",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "SUM(sales)"
+
+    def test_area_chart_has_orderby(self):
+        """Area chart should produce a non-empty orderby in query_context."""
+        params = build_area_chart_params(
+            datasource_id=1,
+            metrics=["AVG(price)"],
+            time_column="date",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "AVG(price)"
+
+    def test_timeseries_bar_chart_has_orderby(self):
+        """Timeseries bar chart should produce a non-empty orderby in query_context."""
+        params = build_timeseries_bar_chart_params(
+            datasource_id=1,
+            metrics=["COUNT(*)"],
+            time_column="ts",
+        )
+        qc = json.loads(build_query_context(params, datasource_id=1))
+        query = qc["queries"][0]
+
+        assert len(query["orderby"]) == 1
+        assert query["orderby"][0][0] == "COUNT(*)"
 
     def test_includes_granularity_for_time_charts(self):
         """Should include granularity and time_grain for timeseries charts."""

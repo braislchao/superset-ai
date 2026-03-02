@@ -7,4 +7,9 @@ Primary interfaces:
     - ``superset_ai.cli`` — CLI (``superset-ai chat``, etc.)
 """
 
-__version__ = "0.1.2"
+import logging
+
+__version__ = "0.2.1"
+
+# Suppress noisy httpx INFO logs (e.g. expected 401s during auth fallback)
+logging.getLogger("httpx").setLevel(logging.WARNING)

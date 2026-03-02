@@ -323,6 +323,7 @@ def build_line_chart_params(
         time_range=time_range,
         row_limit=row_limit,
         timeseries_limit_metric=metrics[0] if metrics else None,
+        order_desc=True,
         show_legend=True,
     )
 
@@ -344,6 +345,7 @@ def build_pie_chart_params(
         time_range=time_range,
         row_limit=row_limit,
         timeseries_limit_metric=metric,
+        order_desc=True,
         show_legend=True,
         legendType="scroll",
         legendOrientation="top",
@@ -468,6 +470,7 @@ def build_area_chart_params(
         time_range=time_range,
         row_limit=row_limit,
         timeseries_limit_metric=metrics[0] if metrics else None,
+        order_desc=True,
         show_legend=True,
         stacked_style="stack" if stacked else None,
     )
@@ -522,6 +525,7 @@ def build_timeseries_bar_chart_params(
         time_range=time_range,
         row_limit=row_limit,
         timeseries_limit_metric=metrics[0] if metrics else None,
+        order_desc=True,
         show_legend=True,
         rich_tooltip=True,
         bar_stacked=stacked,
@@ -838,8 +842,10 @@ def build_query_context(
 
     # --- Orderby --------------------------------------------------------------
     orderby: list[Any] = []
-    if params.order_desc is not None and params.timeseries_limit_metric is not None:
-        orderby = [[params.timeseries_limit_metric, not params.order_desc]]
+    if params.timeseries_limit_metric is not None:
+        # Default to descending when order_desc is not explicitly set
+        desc = params.order_desc if params.order_desc is not None else True
+        orderby = [[params.timeseries_limit_metric, not desc]]
 
     # --- Build query dict -----------------------------------------------------
     query: dict[str, Any] = {
