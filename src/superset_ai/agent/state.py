@@ -2,10 +2,17 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Annotated, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from superset_ai.api.charts import ChartService
+    from superset_ai.api.client import SupersetClient
+    from superset_ai.api.dashboards import DashboardService
+    from superset_ai.api.databases import DatabaseService
+    from superset_ai.api.datasets import DatasetService
 
 
 class AssetReference(BaseModel):
@@ -102,14 +109,8 @@ class AgentState(TypedDict, total=False):
     # Session state
     session: SessionState
     
-    # Current action results
-    last_action_result: dict[str, Any] | None
-    
     # Error tracking
     errors: list[dict[str, Any]]
-    
-    # Final response
-    response: str | None
 
 
 @dataclass
@@ -119,12 +120,6 @@ class ToolContext:
     
     Provides access to Superset services without global state.
     """
-
-    from superset_ai.api.client import SupersetClient
-    from superset_ai.api.charts import ChartService
-    from superset_ai.api.dashboards import DashboardService
-    from superset_ai.api.databases import DatabaseService
-    from superset_ai.api.datasets import DatasetService
 
     client: "SupersetClient"
     session: SessionState

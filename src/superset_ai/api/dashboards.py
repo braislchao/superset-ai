@@ -395,21 +395,3 @@ class DashboardService:
             return DashboardInfo.model_validate(result[0])
         return None
 
-    # =========================================================================
-    # Helper methods
-    # =========================================================================
-
-    def _extract_chart_ids(self, position: dict) -> list[int]:
-        """
-        Extract chart IDs from position_json structure.
-        """
-        chart_ids = []
-        
-        for key, value in position.items():
-            if isinstance(value, dict) and value.get("type") == "CHART":
-                meta = value.get("meta", {})
-                chart_id = meta.get("chartId")
-                if chart_id:
-                    chart_ids.append(chart_id)
-        
-        return chart_ids

@@ -891,25 +891,3 @@ class ChartService:
         # Assume it's a pre-defined metric name
         return metric
 
-    async def find_similar_chart(
-        self,
-        *,
-        datasource_id: int,
-        viz_type: str,
-        metrics: list[str],
-    ) -> ChartInfo | None:
-        """
-        Find an existing chart with similar configuration.
-        
-        Useful for implementing reuse strategy.
-        """
-        charts = await self.list_charts(datasource_id=datasource_id)
-        
-        for chart in charts:
-            if chart.viz_type == viz_type:
-                # Basic match by viz_type only; could be extended to
-                # parse params and compare metrics/dimensions for a
-                # more precise match.
-                return chart
-        
-        return None

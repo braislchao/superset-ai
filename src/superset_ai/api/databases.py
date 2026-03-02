@@ -134,19 +134,6 @@ class DatabaseService:
         result = response.get("result", [])
         return [str(s) for s in result]
 
-    async def test_connection(self, database_id: int) -> bool:
-        """
-        Test database connection.
-        
-        GET /api/v1/database/{id}/connection
-        """
-        try:
-            await self.client.get(f"/database/{database_id}/connection")
-            return True
-        except Exception as e:
-            logger.warning("Database connection test failed: %s", e)
-            return False
-
     async def find_by_name(self, name: str) -> DatabaseInfo | None:
         """
         Find a database by name.
@@ -162,34 +149,6 @@ class DatabaseService:
         if result:
             return DatabaseInfo.model_validate(result[0])
         return None
-
-    async def get_table_columns(
-        self,
-        database_id: int,
-        table_name: str,
-        *,
-        schema: str | None = None,
-    ) -> list[dict]:
-        """
-        Get column information for a table.
-        
-        This uses the dataset metadata endpoint.
-        Note: May require creating a temporary dataset.
-        """
-        # This is a complex operation that typically requires:
-        # 1. Creating a temporary virtual dataset with SELECT * FROM table LIMIT 0
-        # 2. Reading the columns from the dataset
-        # 3. Optionally cleaning up
-        #
-        # For now, we'll use the simpler approach of querying via SQL Lab API
-        # or require the user to have an existing dataset
-        
-        logger.warning(
-            "get_table_columns for %s not fully implemented. "
-            "Use DatasetService.get_dataset() with an existing dataset instead.",
-            table_name,
-        )
-        return []
 
     async def execute_sql(
         self,

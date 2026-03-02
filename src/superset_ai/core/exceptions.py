@@ -28,13 +28,6 @@ class AuthenticationError(SupersetAIError):
         super().__init__(message, details)
 
 
-class TokenExpiredError(AuthenticationError):
-    """Raised when the access token has expired."""
-
-    def __init__(self) -> None:
-        super().__init__("Access token has expired and needs refresh")
-
-
 class CSRFTokenError(AuthenticationError):
     """Raised when CSRF token retrieval or validation fails."""
 
@@ -143,30 +136,3 @@ class AgentError(SupersetAIError):
     pass
 
 
-class ContextDiscoveryError(AgentError):
-    """Raised when the agent fails to discover required context."""
-
-    def __init__(self, message: str = "Failed to discover Superset context") -> None:
-        super().__init__(message)
-
-
-class PlanningError(AgentError):
-    """Raised when the agent fails to plan actions from user input."""
-
-    def __init__(self, message: str = "Failed to plan actions from user request") -> None:
-        super().__init__(message)
-
-
-class ExecutionError(AgentError):
-    """Raised when action execution fails."""
-
-    def __init__(
-        self,
-        message: str,
-        action: str | None = None,
-        cause: Exception | None = None,
-    ) -> None:
-        details = {"action": action, "cause": str(cause) if cause else None}
-        super().__init__(message, details)
-        self.action = action
-        self.cause = cause
