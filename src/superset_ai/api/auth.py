@@ -267,7 +267,7 @@ class SupersetAuthManager:
 
         try:
             login_response = await self._client.post(
-                "/security/login",
+                "/api/v1/security/login",
                 json=login_payload,
             )
         except httpx.RequestError as e:
@@ -338,7 +338,7 @@ class SupersetAuthManager:
         """Fetch CSRF token using the access token."""
         try:
             response = await self._client.get(
-                "/security/csrf_token/",
+                "/api/v1/security/csrf_token/",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
         except httpx.RequestError as e:
@@ -366,7 +366,7 @@ class SupersetAuthManager:
 
         try:
             response = await self._client.post(
-                "/security/refresh",
+                "/api/v1/security/refresh",
                 headers={"Authorization": f"Bearer {self._session.refresh_token}"},
             )
         except httpx.RequestError as e:

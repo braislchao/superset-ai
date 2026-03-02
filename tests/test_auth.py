@@ -222,11 +222,13 @@ class TestSessionBasedAuth:
 
         # JWT fallback: login endpoint + CSRF fetch
         jwt_token = _make_jwt()
-        respx.post(f"{BASE_URL}/security/login").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "refresh-123"},
         )
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(200, json={"result": "jwt-csrf"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "jwt-csrf"}
+        )
 
         session = await auth_manager.get_valid_session()
 
@@ -247,11 +249,13 @@ class TestSessionBasedAuth:
 
         # JWT fallback
         jwt_token = _make_jwt()
-        respx.post(f"{BASE_URL}/security/login").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "r"},
         )
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(200, json={"result": "jwt-csrf"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "jwt-csrf"}
+        )
 
         session = await auth_manager.get_valid_session()
 
@@ -277,14 +281,14 @@ class TestJWTAuth:
             500, json={"error": "not supported"}
         )
 
-        # JWT login (via _client -> /security/login)
-        respx.post(f"{BASE_URL}/security/login").respond(
+        # JWT login (via _client -> /api/v1/security/login)
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "refresh-abc"},
         )
 
-        # JWT CSRF fetch (via _client -> /security/csrf_token/)
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(
+        # JWT CSRF fetch (via _client -> /api/v1/security/csrf_token/)
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
             200, json={"result": "jwt-csrf-token"}
         )
 
@@ -301,7 +305,7 @@ class TestJWTAuth:
         # Session auth fails at initial CSRF
         respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(500, json={"error": "fail"})
         # JWT login succeeds but returns no token
-        respx.post(f"{BASE_URL}/security/login").respond(200, json={"refresh_token": "r"})
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(200, json={"refresh_token": "r"})
 
         with pytest.raises(AuthenticationError, match="missing access_token"):
             await auth_manager.get_valid_session()
@@ -312,7 +316,9 @@ class TestJWTAuth:
         # Session auth fails at initial CSRF
         respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(500, json={"error": "fail"})
         # JWT login fails
-        respx.post(f"{BASE_URL}/security/login").respond(401, json={"message": "Bad credentials"})
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
+            401, json={"message": "Bad credentials"}
+        )
 
         with pytest.raises(AuthenticationError, match="Login failed"):
             await auth_manager.get_valid_session()
@@ -335,7 +341,9 @@ class TestAuthFallback:
         )
 
         # JWT also fails
-        respx.post(f"{BASE_URL}/security/login").respond(500, json={"message": "JWT login fail"})
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
+            500, json={"message": "JWT login fail"}
+        )
 
         with pytest.raises(AuthenticationError) as exc_info:
             await auth_manager.get_valid_session()
@@ -357,7 +365,7 @@ class TestAuthFallback:
         respx.post(f"{BASE_URL}/login/").mock(side_effect=httpx.ConnectError("Connection refused"))
 
         # JWT fallback also fails because Superset is unreachable
-        respx.post(f"{BASE_URL}/security/login").mock(
+        respx.post(f"{BASE_URL}/api/v1/security/login").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
@@ -374,11 +382,13 @@ class TestAuthFallback:
 
         # JWT fallback succeeds
         jwt_token = _make_jwt()
-        respx.post(f"{BASE_URL}/security/login").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "r"},
         )
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(200, json={"result": "jwt-csrf"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "jwt-csrf"}
+        )
 
         session = await auth_manager.get_valid_session()
 
@@ -403,12 +413,14 @@ class TestCSRFTokenErrors:
 
         # Falls through to JWT, which also needs CSRF. Both routes must be set up.
         jwt_token = _make_jwt()
-        respx.post(f"{BASE_URL}/security/login").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "r"},
         )
         # JWT CSRF also fails
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(403, json={"message": "Forbidden"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            403, json={"message": "Forbidden"}
+        )
 
         with pytest.raises(CSRFTokenError):
             await auth_manager.get_valid_session()
@@ -422,11 +434,13 @@ class TestCSRFTokenErrors:
 
         # JWT fallback
         jwt_token = _make_jwt()
-        respx.post(f"{BASE_URL}/security/login").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/login").respond(
             200,
             json={"access_token": jwt_token, "refresh_token": "r"},
         )
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(200, json={"not_result": "oops"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"not_result": "oops"}
+        )
 
         with pytest.raises(CSRFTokenError, match="missing 'result' field"):
             await auth_manager.get_valid_session()
@@ -442,7 +456,9 @@ class TestCSRFTokenErrors:
         )
 
         # JWT login fails too (it tries _client which has base_url=superset_base_url)
-        respx.post(f"{BASE_URL}/security/login").mock(side_effect=httpx.NetworkError("DNS failure"))
+        respx.post(f"{BASE_URL}/api/v1/security/login").mock(
+            side_effect=httpx.NetworkError("DNS failure")
+        )
 
         with pytest.raises(AuthenticationError):
             await auth_manager.get_valid_session()
@@ -472,9 +488,13 @@ class TestTokenRefresh:
         )
 
         # Refresh endpoint
-        respx.post(f"{BASE_URL}/security/refresh").respond(200, json={"access_token": new_jwt})
+        respx.post(f"{BASE_URL}/api/v1/security/refresh").respond(
+            200, json={"access_token": new_jwt}
+        )
         # CSRF after refresh
-        respx.get(f"{BASE_URL}/security/csrf_token/").respond(200, json={"result": "new-csrf"})
+        respx.get(f"{BASE_URL}/api/v1/security/csrf_token/").respond(
+            200, json={"result": "new-csrf"}
+        )
 
         session = await auth_manager.get_valid_session()
 
@@ -496,7 +516,7 @@ class TestTokenRefresh:
         )
 
         # Refresh fails
-        respx.post(f"{BASE_URL}/security/refresh").respond(
+        respx.post(f"{BASE_URL}/api/v1/security/refresh").respond(
             401, json={"message": "Invalid refresh token"}
         )
 
