@@ -7,27 +7,27 @@ from pydantic import Field, field_serializer, model_validator
 
 from superset_ai.schemas.common import BaseSchema, OwnerInfo, TimestampMixin
 
-
 # Supported chart types
 ChartType = Literal[
     # Original types
-    "dist_bar",              # Distribution bar (no time column required)
-    "line",                  # Line chart (requires time column)
+    "dist_bar",  # Distribution bar (no time column required)
+    "line",  # Line chart (requires time column)
     "pie",
     "table",
-    "big_number_total",      # Big number without trendline
+    "big_number_total",  # Big number without trendline
     # New types
-    "area",                  # Area chart (filled line)
-    "big_number",            # Big number with trendline
+    "area",  # Area chart (filled line)
+    "big_number",  # Big number with trendline
     "echarts_timeseries_bar",  # ECharts bar chart over time
-    "bubble",                # Bubble chart (scatter with size)
-    "funnel",                # Funnel chart
-    "gauge_chart",           # Gauge / speedometer
-    "treemap_v2",            # Treemap
-    "histogram",             # Histogram (value distribution)
-    "box_plot",              # Box plot (statistical distribution)
-    "heatmap",               # Heatmap (2D color grid)
+    "bubble",  # Bubble chart (scatter with size)
+    "funnel",  # Funnel chart
+    "gauge_chart",  # Gauge / speedometer
+    "treemap_v2",  # Treemap
+    "histogram",  # Histogram (value distribution)
+    "box_plot",  # Box plot (statistical distribution)
+    "heatmap",  # Heatmap (2D color grid)
 ]
+
 
 class ChartInfo(TimestampMixin, BaseSchema):
     """
@@ -93,7 +93,7 @@ class ChartDetail(TimestampMixin, BaseSchema):
 class AdhocMetric(BaseSchema):
     """
     Adhoc metric definition for chart params.
-    
+
     Used when creating metrics inline rather than referencing
     pre-defined dataset metrics.
     """
@@ -109,45 +109,45 @@ class AdhocMetric(BaseSchema):
 class ChartParams(BaseSchema):
     """
     Internal model for chart visualization parameters.
-    
+
     This gets serialized to JSON string for the `params` field.
     Note: Structure varies significantly by viz_type.
     """
 
     viz_type: str
     datasource: str  # Format: "{id}__table"
-    
+
     # Metrics and dimensions
     metrics: list[str | dict[str, Any]] = Field(default_factory=list)
     metric: str | dict[str, Any] | None = None  # Singular metric (heatmap, etc.)
     groupby: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=list)
-    
+
     # Time settings
     time_range: str = "No filter"
     granularity_sqla: str | None = None
     time_grain_sqla: str | None = None
-    
+
     # Filters
     adhoc_filters: list[dict[str, Any]] = Field(default_factory=list)
-    
+
     # Ordering
     row_limit: int = 1000
     order_desc: bool | None = None
     timeseries_limit_metric: str | dict[str, Any] | None = None
-    
+
     # Chart-specific options (varies by viz_type)
     show_legend: bool = True
     legendType: str = "scroll"
     legendOrientation: str = "top"
     x_axis_title: str | None = None
     y_axis_title: str | None = None
-    
+
     # Bar chart specific
     rich_tooltip: bool = True
     show_bar_value: bool = False
     bar_stacked: bool = False
-    
+
     # Table-specific
     all_columns: list[str] = Field(default_factory=list)
     percent_metrics: list[str] = Field(default_factory=list)
@@ -192,7 +192,9 @@ class ChartParams(BaseSchema):
     normalized: bool = False
 
     # Box plot specific
-    whisker_options: str | None = None  # "Tukey", "Min/max (no outliers)", "2/98 percentiles", "9/91 percentiles"
+    whisker_options: str | None = (
+        None  # "Tukey", "Min/max (no outliers)", "2/98 percentiles", "9/91 percentiles"
+    )
 
     # Heatmap / histogram specific
     all_columns_x: str | list[str] | None = None  # str for heatmap, list for histogram
@@ -364,7 +366,7 @@ def build_table_params(
         time_range=time_range,
         row_limit=row_limit,
     )
-    
+
     if metrics and groupby:
         # Aggregated table
         params.metrics = metrics
@@ -372,7 +374,7 @@ def build_table_params(
     else:
         # Raw data table
         params.all_columns = columns
-    
+
     return params
 
 
@@ -401,12 +403,12 @@ def build_adhoc_metric(
 ) -> dict[str, Any]:
     """
     Build an adhoc metric definition.
-    
+
     Args:
         column_name: Name of the column to aggregate (use "*" for COUNT(*))
         aggregate: Aggregation function (COUNT, SUM, AVG, MAX, MIN)
         label: Display label for the metric
-    
+
     Returns:
         Dict suitable for inclusion in metrics array
     """
@@ -418,7 +420,7 @@ def build_adhoc_metric(
             "label": label or "COUNT(*)",
             "optionName": "metric_count_star",
         }
-    
+
     return {
         "expressionType": "SIMPLE",
         "column": {"column_name": column_name},
@@ -759,7 +761,12 @@ def _metric_to_dict(metric: str | dict[str, Any]) -> dict[str, Any]:
     if isinstance(metric, dict):
         return metric
     # Treat as a pre-defined metric name reference
-    return {"label": metric, "expressionType": "SIMPLE", "column": {"column_name": metric}, "aggregate": "SUM"}
+    return {
+        "label": metric,
+        "expressionType": "SIMPLE",
+        "column": {"column_name": metric},
+        "aggregate": "SUM",
+    }
 
 
 # =============================================================================
@@ -806,12 +813,7 @@ def build_query_context(
     viz = params.viz_type
 
     # Histogram: raw column fetch, no metrics
-    if viz == "histogram":
-        query_columns = list(params_dict.get("all_columns", []))
-        query_metrics = []
-
-    # Table (raw mode): uses all_columns, no metrics
-    elif viz == "table" and not query_metrics:
+    if viz == "histogram" or viz == "table" and not query_metrics:
         query_columns = list(params_dict.get("all_columns", []))
         query_metrics = []
 
@@ -823,9 +825,7 @@ def build_query_context(
             if m is not None
         ]
         query_columns = [
-            c
-            for c in (params_dict.get("series"), params_dict.get("entity"))
-            if c is not None
+            c for c in (params_dict.get("series"), params_dict.get("entity")) if c is not None
         ]
 
     # Heatmap: groupby is all_columns_x + all_columns_y

@@ -37,7 +37,7 @@ def get_tool_context() -> Any:
     try:
         return _tool_context_var.get()
     except LookupError:
-        raise RuntimeError("Tool context not set. Call set_tool_context first.")
+        raise RuntimeError("Tool context not set. Call set_tool_context first.") from None
 
 
 # =============================================================================
@@ -89,9 +89,7 @@ async def list_tables(database_id: int, schema_name: str | None = None) -> list[
     ctx = get_tool_context()
     result = await discovery_ops.list_tables(ctx.databases, database_id, schema_name)
     # Cache table names
-    ctx.session.superset_context.discovered_tables[database_id] = [
-        t["name"] for t in result
-    ]
+    ctx.session.superset_context.discovered_tables[database_id] = [t["name"] for t in result]
     return result
 
 
@@ -170,9 +168,7 @@ async def profile_dataset(
     Returns dataset metadata, row count, and per-column statistics.
     """
     ctx = get_tool_context()
-    return await discovery_ops.profile_dataset(
-        ctx.databases, ctx.datasets, dataset_id, sample_size
-    )
+    return await discovery_ops.profile_dataset(ctx.databases, ctx.datasets, dataset_id, sample_size)
 
 
 # =============================================================================
@@ -280,8 +276,14 @@ async def create_line_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_line_chart(
-        ctx.charts, title, dataset_id, metrics, time_column,
-        dimensions, time_grain, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        metrics,
+        time_column,
+        dimensions,
+        time_grain,
+        time_range,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -376,9 +378,7 @@ async def create_metric_chart(
     Returns the created chart information.
     """
     ctx = get_tool_context()
-    result = await chart_ops.create_metric_chart(
-        ctx.charts, title, dataset_id, metric, time_range
-    )
+    result = await chart_ops.create_metric_chart(ctx.charts, title, dataset_id, metric, time_range)
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
 
@@ -415,8 +415,15 @@ async def create_area_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_area_chart(
-        ctx.charts, title, dataset_id, metrics, time_column,
-        dimensions, time_grain, time_range, stacked,
+        ctx.charts,
+        title,
+        dataset_id,
+        metrics,
+        time_column,
+        dimensions,
+        time_grain,
+        time_range,
+        stacked,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -449,8 +456,13 @@ async def create_big_number_trendline_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_big_number_trendline_chart(
-        ctx.charts, title, dataset_id, metric, time_column,
-        time_grain, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        metric,
+        time_column,
+        time_grain,
+        time_range,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -488,8 +500,15 @@ async def create_timeseries_bar_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_timeseries_bar_chart(
-        ctx.charts, title, dataset_id, metrics, time_column,
-        dimensions, time_grain, time_range, stacked,
+        ctx.charts,
+        title,
+        dataset_id,
+        metrics,
+        time_column,
+        dimensions,
+        time_grain,
+        time_range,
+        stacked,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -529,8 +548,15 @@ async def create_bubble_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_bubble_chart(
-        ctx.charts, title, dataset_id, x_metric, y_metric,
-        size_metric, series_column, entity_column, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        x_metric,
+        y_metric,
+        size_metric,
+        series_column,
+        entity_column,
+        time_range,
         max_bubble_size,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
@@ -564,8 +590,13 @@ async def create_funnel_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_funnel_chart(
-        ctx.charts, title, dataset_id, metric, dimension,
-        time_range, sort_by_metric,
+        ctx.charts,
+        title,
+        dataset_id,
+        metric,
+        dimension,
+        time_range,
+        sort_by_metric,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -598,7 +629,13 @@ async def create_gauge_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_gauge_chart(
-        ctx.charts, title, dataset_id, metric, min_val, max_val, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        metric,
+        min_val,
+        max_val,
+        time_range,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -631,7 +668,12 @@ async def create_treemap_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_treemap_chart(
-        ctx.charts, title, dataset_id, metric, dimensions, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        metric,
+        dimensions,
+        time_range,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -668,8 +710,14 @@ async def create_histogram_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_histogram_chart(
-        ctx.charts, title, dataset_id, column, dimensions,
-        num_bins, normalized, time_range,
+        ctx.charts,
+        title,
+        dataset_id,
+        column,
+        dimensions,
+        num_bins,
+        normalized,
+        time_range,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -703,8 +751,13 @@ async def create_box_plot_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_box_plot_chart(
-        ctx.charts, title, dataset_id, metrics, dimensions,
-        time_range, whisker_options,
+        ctx.charts,
+        title,
+        dataset_id,
+        metrics,
+        dimensions,
+        time_range,
+        whisker_options,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -743,8 +796,16 @@ async def create_heatmap_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.create_heatmap_chart(
-        ctx.charts, title, dataset_id, metric, x_column, y_column,
-        time_range, linear_color_scheme, normalize_across, show_values,
+        ctx.charts,
+        title,
+        dataset_id,
+        metric,
+        x_column,
+        y_column,
+        time_range,
+        linear_color_scheme,
+        normalize_across,
+        show_values,
     )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
@@ -808,7 +869,8 @@ async def update_chart(
     """
     ctx = get_tool_context()
     result = await chart_ops.update_chart(
-        ctx.charts, chart_id,
+        ctx.charts,
+        chart_id,
         title=title,
         description=description,
         cache_timeout=cache_timeout,
@@ -897,7 +959,8 @@ async def update_dashboard(
     """
     ctx = get_tool_context()
     result = await dashboard_ops.update_dashboard(
-        ctx.dashboards, dashboard_id,
+        ctx.dashboards,
+        dashboard_id,
         title=title,
         slug=slug,
         css=css,
@@ -927,9 +990,7 @@ async def remove_chart_from_dashboard(
     Returns updated dashboard information.
     """
     ctx = get_tool_context()
-    return await dashboard_ops.remove_chart_from_dashboard(
-        ctx.dashboards, dashboard_id, chart_id
-    )
+    return await dashboard_ops.remove_chart_from_dashboard(ctx.dashboards, dashboard_id, chart_id)
 
 
 @tool
@@ -960,9 +1021,7 @@ async def delete_all_charts_and_dashboards() -> dict[str, Any]:
     Returns a summary of what was deleted.
     """
     ctx = get_tool_context()
-    return await dashboard_ops.delete_all_charts_and_dashboards(
-        ctx.charts, ctx.dashboards
-    )
+    return await dashboard_ops.delete_all_charts_and_dashboards(ctx.charts, ctx.dashboards)
 
 
 @tool
@@ -1020,9 +1079,7 @@ async def create_tabbed_dashboard(
     Returns the created dashboard information with URL.
     """
     ctx = get_tool_context()
-    result = await dashboard_ops.create_tabbed_dashboard(
-        ctx.dashboards, title, tabs, color_scheme
-    )
+    result = await dashboard_ops.create_tabbed_dashboard(ctx.dashboards, title, tabs, color_scheme)
     ctx.session.add_asset("dashboard", result["id"], result["title"])
     ctx.session.active_dashboard_id = result["id"]
     ctx.session.active_dashboard_title = result["title"]
@@ -1096,7 +1153,8 @@ async def add_filter_to_dashboard(
     """
     ctx = get_tool_context()
     return await dashboard_ops.add_filter_to_dashboard(
-        ctx.dashboards, dashboard_id,
+        ctx.dashboards,
+        dashboard_id,
         name=name,
         filter_type=filter_type,
         dataset_id=dataset_id,
@@ -1124,9 +1182,7 @@ async def remove_filter_from_dashboard(
     Returns confirmation of removal.
     """
     ctx = get_tool_context()
-    return await dashboard_ops.remove_filter_from_dashboard(
-        ctx.dashboards, dashboard_id, filter_id
-    )
+    return await dashboard_ops.remove_filter_from_dashboard(ctx.dashboards, dashboard_id, filter_id)
 
 
 @tool

@@ -132,14 +132,14 @@ def build_session_context(
 ) -> str:
     """Build the session context string for the system prompt."""
     parts = []
-    
+
     # Databases
     if databases:
         db_list = ", ".join(d.get("database_name", "unknown") for d in databases)
         parts.append(f"Available Databases: {db_list}")
     else:
         parts.append("Available Databases: None discovered yet")
-    
+
     # Active dashboard
     if active_dashboard:
         parts.append(
@@ -148,13 +148,10 @@ def build_session_context(
         )
     else:
         parts.append("Active Dashboard: None")
-    
+
     # Recent assets
     if recent_assets:
-        asset_list = [
-            f"- {a['type']}: {a['name']} (ID: {a['id']})"
-            for a in recent_assets[:5]
-        ]
+        asset_list = [f"- {a['type']}: {a['name']} (ID: {a['id']})" for a in recent_assets[:5]]
         parts.append("Recently Created:\n" + "\n".join(asset_list))
-    
+
     return "\n".join(parts)

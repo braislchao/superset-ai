@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -38,12 +39,12 @@ class SupersetAuthManager:
     - JWT authentication (legacy fallback)
     - CSRF token retrieval for mutating operations
     - Token refresh when expired
-    
+
     Superset 6.x Authentication Flow (Session-based):
     1. GET /api/v1/security/csrf_token/ → get CSRF token (establishes session cookie)
     2. POST /login/ → form-based login with CSRF token
     3. Use session cookies for all subsequent requests
-    
+
     Legacy JWT Flow (Superset 3.x-5.x):
     1. POST /api/v1/security/login → get access_token (JWT)
     2. GET /api/v1/security/csrf_token/ → get CSRF token
@@ -71,13 +72,13 @@ class SupersetAuthManager:
     def _client(self) -> httpx.AsyncClient:
         """
         Get HTTP client for API requests.
-        
+
         Uses shared client if provided (for cookie persistence), otherwise
         creates own client.
         """
         if self._client_getter is not None:
             return self._client_getter()
-        
+
         # Fallback to own client
         if self._own_http_client is None:
             self._own_http_client = httpx.AsyncClient(
@@ -90,7 +91,7 @@ class SupersetAuthManager:
     def _root_client(self) -> httpx.AsyncClient:
         """
         Get HTTP client for root-level requests (login, csrf token).
-        
+
         Uses the base URL without /api/v1 prefix.
         """
         if self._auth_http_client is None:
@@ -117,7 +118,7 @@ class SupersetAuthManager:
     async def get_valid_session(self) -> AuthSession:
         """
         Get a valid authentication session.
-        
+
         Will authenticate if no session exists, or refresh if expired.
         Thread-safe via asyncio lock.
         """
@@ -144,7 +145,7 @@ class SupersetAuthManager:
     async def _authenticate(self) -> AuthSession:
         """
         Perform authentication to Superset.
-        
+
         Tries session-based auth first (Superset 6.x), falls back to JWT (legacy).
         Connection errors are NOT caught — they indicate Superset is unreachable
         and should propagate immediately rather than being masked by a JWT fallback
@@ -159,15 +160,18 @@ class SupersetAuthManager:
         except httpx.TimeoutException:
             # Connection timed out — same reasoning
             raise
-        except Exception as e:
-            logger.debug("Session-based auth failed, trying JWT: %s", e)
-            # Fall back to JWT authentication
-            return await self._authenticate_jwt()
+        except Exception as session_error:
+            logger.debug("Session-based auth failed, trying JWT: %s", session_error)
+            # Fall back to JWT authentication; chain so both errors are visible
+            try:
+                return await self._authenticate_jwt()
+            except Exception as jwt_error:
+                raise jwt_error from session_error
 
     async def _authenticate_session_based(self) -> AuthSession:
         """
         Perform session-based authentication (Superset 6.x+).
-        
+
         Steps:
         1. GET CSRF token (this creates a session cookie)
         2. POST to /login/ with form data (like browser would)
@@ -175,16 +179,16 @@ class SupersetAuthManager:
         """
         # Step 1: Get CSRF token (this sets the session cookie)
         csrf_token = await self._fetch_csrf_token_initial()
-        
+
         # Step 2: Login via form POST using the ROOT client (not API client)
         login_url = "/login/"
-        
+
         login_data = {
             "username": self.config.superset_username,
             "password": self.config.superset_password.get_secret_value(),
             "csrf_token": csrf_token,
         }
-        
+
         try:
             # Use follow_redirects=False to check if login succeeded (302 = success)
             response = await self._root_client.post(
@@ -216,18 +220,18 @@ class SupersetAuthManager:
         # Store session cookies from the root client for later use
         for name, value in self._root_client.cookies.items():
             self._session_cookies[name] = value
-        
+
         # Step 3: Verify login by checking /api/v1/me/ using the root client
         me_response = await self._root_client.get(
             "/api/v1/me/",
             headers={"X-CSRFToken": csrf_token},
         )
-        
+
         if me_response.status_code == 200:
             me_data = me_response.json()
             result = me_data.get("result", {})
             if not result.get("is_anonymous", True):
-                logger.info("Session-based auth successful for user: %s", result.get('username'))
+                logger.info("Session-based auth successful for user: %s", result.get("username"))
                 # Update cookies again after verification
                 for name, value in self._root_client.cookies.items():
                     self._session_cookies[name] = value
@@ -238,7 +242,7 @@ class SupersetAuthManager:
                     expires_at=time.time() + 86400,  # Session typically lasts 24 hours
                     session_based=True,
                 )
-        
+
         raise AuthenticationError(
             "Session login succeeded but user verification failed",
             details={"me_response": self._safe_json(me_response)},
@@ -247,7 +251,7 @@ class SupersetAuthManager:
     async def _authenticate_jwt(self) -> AuthSession:
         """
         Perform JWT authentication (legacy Superset 3.x-5.x).
-        
+
         Steps:
         1. Login with username/password to get JWT
         2. Fetch CSRF token
@@ -310,7 +314,7 @@ class SupersetAuthManager:
     async def _fetch_csrf_token_initial(self) -> str:
         """
         Fetch CSRF token without access token (for session-based auth).
-        
+
         Uses the root client to ensure cookies are shared with the login request.
         """
         try:
@@ -320,9 +324,7 @@ class SupersetAuthManager:
             raise CSRFTokenError(f"Failed to fetch CSRF token: {e}") from e
 
         if response.status_code != 200:
-            raise CSRFTokenError(
-                f"CSRF token request failed with status {response.status_code}"
-            )
+            raise CSRFTokenError(f"CSRF token request failed with status {response.status_code}")
 
         data = response.json()
         csrf_token = data.get("result")
@@ -343,9 +345,7 @@ class SupersetAuthManager:
             raise CSRFTokenError(f"Failed to fetch CSRF token: {e}") from e
 
         if response.status_code != 200:
-            raise CSRFTokenError(
-                f"CSRF token request failed with status {response.status_code}"
-            )
+            raise CSRFTokenError(f"CSRF token request failed with status {response.status_code}")
 
         data = response.json()
         csrf_token = data.get("result")
@@ -358,7 +358,7 @@ class SupersetAuthManager:
     async def _refresh_token(self) -> AuthSession:
         """
         Refresh the access token using the refresh token.
-        
+
         If refresh token is not available, raises AuthenticationError.
         """
         if self._session is None or not self._session.refresh_token:
@@ -398,7 +398,7 @@ class SupersetAuthManager:
     def _extract_expiry(self, token: str) -> float:
         """
         Extract expiry time from JWT token.
-        
+
         Falls back to 1 hour from now if parsing fails.
         """
         import base64
@@ -418,7 +418,7 @@ class SupersetAuthManager:
 
             decoded = base64.urlsafe_b64decode(payload)
             claims = json.loads(decoded)
-            
+
             exp = claims.get("exp")
             if exp and isinstance(exp, (int, float)):
                 return float(exp)

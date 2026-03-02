@@ -126,13 +126,13 @@ class DashboardListParams(BaseSchema):
 def generate_position_json(chart_ids: list[int]) -> str:
     """
     Generate a simple vertical stack layout for charts.
-    
+
     Each chart gets a full-width row in a 12-column grid.
     This is a safe, simple layout that works reliably.
-    
+
     Args:
         chart_ids: List of chart IDs to include
-    
+
     Returns:
         JSON string for position_json field
     """
@@ -195,11 +195,11 @@ def generate_grid_layout(
 ) -> str:
     """
     Generate a grid layout with multiple charts per row.
-    
+
     Args:
         chart_ids: List of chart IDs to include
         columns: Number of columns (1, 2, 3, 4, or 6 for even division of 12)
-    
+
     Returns:
         JSON string for position_json field
     """
@@ -398,9 +398,7 @@ def _add_charts_to_position(
     """
     # Determine the highest ROW-N index already present
     existing_row_indices = [
-        int(k.split("-")[1])
-        for k in position
-        if k.startswith("ROW-") and k.split("-")[1].isdigit()
+        int(k.split("-")[1]) for k in position if k.startswith("ROW-") and k.split("-")[1].isdigit()
     ]
     next_row = (max(existing_row_indices) + 1) if existing_row_indices else 0
 
@@ -539,7 +537,9 @@ def _remove_chart_from_position(
                 for row_parent_id in row.get("parents", []):
                     if row_parent_id in position:
                         parent_comp = position[row_parent_id]
-                        if isinstance(parent_comp, dict) and parent_id in parent_comp.get("children", []):
+                        if isinstance(parent_comp, dict) and parent_id in parent_comp.get(
+                            "children", []
+                        ):
                             parent_comp["children"].remove(parent_id)
                 del position[parent_id]
 
@@ -566,15 +566,15 @@ def generate_dashboard_metadata(
 ) -> str:
     """
     Generate dashboard metadata JSON.
-    
+
     Args:
         chart_ids: List of chart IDs in the dashboard
         refresh_frequency: Auto-refresh interval in seconds (0 = disabled)
         color_scheme: Color scheme name
-    
+
     Returns:
         JSON string for json_metadata field
-    
+
     Note:
         Do NOT include a 'positions' key here - Superset uses that to override
         position_json, which would cause layout data to be lost.
@@ -600,13 +600,15 @@ def generate_dashboard_metadata(
 # =============================================================================
 
 # Valid filter types in Superset 3.x
-VALID_FILTER_TYPES = frozenset({
-    "filter_select",
-    "filter_range",
-    "filter_time",
-    "filter_timecolumn",
-    "filter_timegrain",
-})
+VALID_FILTER_TYPES = frozenset(
+    {
+        "filter_select",
+        "filter_range",
+        "filter_time",
+        "filter_timecolumn",
+        "filter_timegrain",
+    }
+)
 
 
 def build_native_filter(
@@ -664,9 +666,7 @@ def build_native_filter(
         targets: list[dict[str, Any]] = [{}]
     else:
         if dataset_id is None or column is None:
-            raise ValueError(
-                f"filter_type '{filter_type}' requires both dataset_id and column."
-            )
+            raise ValueError(f"filter_type '{filter_type}' requires both dataset_id and column.")
         targets = [{"datasetId": dataset_id, "column": {"name": column}}]
 
     # Build scope

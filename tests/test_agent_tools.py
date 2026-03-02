@@ -7,58 +7,44 @@ representative tools (correct delegation, session caching, asset tracking).
 from __future__ import annotations
 
 import contextvars
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from superset_ai.agent.tools import (
     ALL_TOOLS,
     _tool_context_var,
-    get_tool_context,
-    set_tool_context,
-    # Discovery tools
-    list_databases,
-    list_schemas,
-    list_tables,
-    get_dataset_columns,
-    list_existing_datasets,
-    execute_sql,
-    profile_dataset,
-    # Dataset tools
-    find_or_create_dataset,
     # Chart creation tools
     create_bar_chart,
+    create_dashboard,
     create_line_chart,
     create_pie_chart,
-    create_dashboard,
+    create_tabbed_dashboard,
+    delete_chart,
+    execute_sql,
+    # Dataset tools
+    find_or_create_dataset,
+    get_chart,
+    get_dataset_columns,
+    get_tool_context,
     # Chart management tools
     list_all_charts,
-    get_chart,
-    update_chart,
-    delete_chart,
     # Dashboard tools
     list_all_dashboards,
-    create_tabbed_dashboard,
+    # Discovery tools
+    list_databases,
+    list_existing_datasets,
+    list_schemas,
+    list_tables,
+    profile_dataset,
+    set_tool_context,
+    update_chart,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def make_mock_context():
-    """Create a mock ToolContext with all required service attributes."""
-    ctx = MagicMock()
-    ctx.charts = AsyncMock()
-    ctx.dashboards = AsyncMock()
-    ctx.datasets = AsyncMock()
-    ctx.databases = AsyncMock()
-    ctx.session = MagicMock()
-    ctx.session.superset_context = MagicMock()
-    ctx.session.superset_context.databases = None
-    ctx.session.superset_context.discovered_tables = {}
-    ctx.session.superset_context.discovered_columns = {}
-    return ctx
+from tests.conftest import make_mock_tool_context as make_mock_context
 
 
 @pytest.fixture(autouse=True)
@@ -72,6 +58,7 @@ def _reset_tool_context():
 # =========================================================================
 # A. Context management
 # =========================================================================
+
 
 class TestContextManagement:
     """Tests for set_tool_context / get_tool_context."""
@@ -87,9 +74,11 @@ class TestContextManagement:
         # Replace the module-level ContextVar with a fresh one that has
         # never been set, so .get() raises LookupError.
         fresh_var = contextvars.ContextVar("_fresh")
-        with patch(f"{OPS_BASE}._tool_context_var", fresh_var):
-            with pytest.raises(RuntimeError, match="Tool context not set"):
-                get_tool_context()
+        with (
+            patch(f"{OPS_BASE}._tool_context_var", fresh_var),
+            pytest.raises(RuntimeError, match="Tool context not set"),
+        ):
+            get_tool_context()
 
     def test_overwrite_context(self):
         """Setting context twice replaces the previous value."""
@@ -103,6 +92,7 @@ class TestContextManagement:
 # =========================================================================
 # B. ALL_TOOLS registry
 # =========================================================================
+
 
 class TestAllToolsList:
     """Tests for the ALL_TOOLS registry."""
@@ -247,11 +237,13 @@ class TestDiscoveryToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await execute_sql.ainvoke({
-                "database_id": 1,
-                "sql": "SELECT 1 AS x",
-                "limit": 50,
-            })
+            result = await execute_sql.ainvoke(
+                {
+                    "database_id": 1,
+                    "sql": "SELECT 1 AS x",
+                    "limit": 50,
+                }
+            )
 
         mock_op.assert_awaited_once_with(ctx.databases, 1, "SELECT 1 AS x", 50)
         assert result == fake_result
@@ -273,10 +265,12 @@ class TestDiscoveryToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await profile_dataset.ainvoke({
-                "dataset_id": 10,
-                "sample_size": 3,
-            })
+            result = await profile_dataset.ainvoke(
+                {
+                    "dataset_id": 10,
+                    "sample_size": 3,
+                }
+            )
 
         mock_op.assert_awaited_once_with(ctx.databases, ctx.datasets, 10, 3)
         assert result == fake_result
@@ -319,19 +313,26 @@ class TestChartToolWiring:
         ctx = make_mock_context()
         set_tool_context(ctx)
 
-        fake_result = {"id": 100, "title": "Revenue by Region", "type": "echarts_bar", "url": "/chart/100/"}
+        fake_result = {
+            "id": 100,
+            "title": "Revenue by Region",
+            "type": "echarts_bar",
+            "url": "/chart/100/",
+        }
 
         with patch(
             f"{OPS_BASE}.chart_ops.create_bar_chart",
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await create_bar_chart.ainvoke({
-                "title": "Revenue by Region",
-                "dataset_id": 5,
-                "metrics": ["SUM(revenue)"],
-                "dimensions": ["region"],
-            })
+            result = await create_bar_chart.ainvoke(
+                {
+                    "title": "Revenue by Region",
+                    "dataset_id": 5,
+                    "metrics": ["SUM(revenue)"],
+                    "dimensions": ["region"],
+                }
+            )
 
         mock_op.assert_awaited_once_with(
             ctx.charts,
@@ -349,19 +350,26 @@ class TestChartToolWiring:
         ctx = make_mock_context()
         set_tool_context(ctx)
 
-        fake_result = {"id": 101, "title": "Sales Trend", "type": "echarts_timeseries_line", "url": "/chart/101/"}
+        fake_result = {
+            "id": 101,
+            "title": "Sales Trend",
+            "type": "echarts_timeseries_line",
+            "url": "/chart/101/",
+        }
 
         with patch(
             f"{OPS_BASE}.chart_ops.create_line_chart",
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await create_line_chart.ainvoke({
-                "title": "Sales Trend",
-                "dataset_id": 5,
-                "metrics": ["SUM(amount)"],
-                "time_column": "order_date",
-            })
+            result = await create_line_chart.ainvoke(
+                {
+                    "title": "Sales Trend",
+                    "dataset_id": 5,
+                    "metrics": ["SUM(amount)"],
+                    "time_column": "order_date",
+                }
+            )
 
         mock_op.assert_awaited_once_with(
             ctx.charts,
@@ -388,12 +396,14 @@ class TestChartToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await create_pie_chart.ainvoke({
-                "title": "Market Share",
-                "dataset_id": 5,
-                "metric": "SUM(revenue)",
-                "dimension": "company",
-            })
+            result = await create_pie_chart.ainvoke(
+                {
+                    "title": "Market Share",
+                    "dataset_id": 5,
+                    "metric": "SUM(revenue)",
+                    "dimension": "company",
+                }
+            )
 
         mock_op.assert_awaited_once_with(
             ctx.charts,
@@ -456,13 +466,16 @@ class TestChartManagementToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await update_chart.ainvoke({
-                "chart_id": 55,
-                "title": "Renamed Chart",
-            })
+            result = await update_chart.ainvoke(
+                {
+                    "chart_id": 55,
+                    "title": "Renamed Chart",
+                }
+            )
 
         mock_op.assert_awaited_once_with(
-            ctx.charts, 55,
+            ctx.charts,
+            55,
             title="Renamed Chart",
             description=None,
             cache_timeout=None,
@@ -527,10 +540,12 @@ class TestDashboardToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await create_dashboard.ainvoke({
-                "title": "Sales Dashboard",
-                "chart_ids": [100, 101],
-            })
+            result = await create_dashboard.ainvoke(
+                {
+                    "title": "Sales Dashboard",
+                    "chart_ids": [100, 101],
+                }
+            )
 
         mock_op.assert_awaited_once_with(
             ctx.dashboards,
@@ -562,10 +577,12 @@ class TestDashboardToolWiring:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_op:
-            result = await create_tabbed_dashboard.ainvoke({
-                "title": "Tabbed Dash",
-                "tabs": tabs,
-            })
+            result = await create_tabbed_dashboard.ainvoke(
+                {
+                    "title": "Tabbed Dash",
+                    "tabs": tabs,
+                }
+            )
 
         mock_op.assert_awaited_once_with(
             ctx.dashboards,

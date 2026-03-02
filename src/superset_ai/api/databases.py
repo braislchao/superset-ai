@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
     """
     Service for interacting with Superset database connections.
-    
+
     Wraps /api/v1/database/ endpoints.
     """
 
@@ -30,9 +30,9 @@ class DatabaseService:
     ) -> list[DatabaseInfo]:
         """
         List all database connections.
-        
+
         GET /api/v1/database/
-        
+
         Falls back to /api/v1/sqllab/ endpoint if the primary endpoint
         returns empty results (workaround for Superset 3.1.0 permissions bug).
         """
@@ -42,9 +42,9 @@ class DatabaseService:
         }
 
         response = await self.client.get("/database/", params=params)
-        
+
         result = response.get("result", [])
-        
+
         # Fallback: If no results, try the /sqllab/ endpoint
         # which includes databases in its response (Superset 3.1.0 workaround)
         if not result:
@@ -57,13 +57,13 @@ class DatabaseService:
                     logger.debug("Found %d databases via /sqllab/ fallback", len(result))
             except Exception as e:
                 logger.warning("Fallback to /sqllab/ failed: %s", e)
-        
+
         return [DatabaseInfo.model_validate(item) for item in result]
 
     async def get_database(self, database_id: int) -> DatabaseInfo:
         """
         Get information about a specific database.
-        
+
         GET /api/v1/database/{id}
         """
         response = await self.client.get(f"/database/{database_id}")
@@ -78,9 +78,9 @@ class DatabaseService:
     ) -> list[TableInfo]:
         """
         List tables in a database.
-        
+
         GET /api/v1/database/{id}/tables/
-        
+
         Note: Superset 3.1.0 requires schema_name. If not provided,
         we'll try to get the first available schema.
         """
@@ -88,11 +88,8 @@ class DatabaseService:
         # If no schema provided, try to get default
         if schema is None:
             schemas = await self.list_schemas(database_id)
-            if schemas:
-                schema = schemas[0]  # Use first schema (e.g., "main" for SQLite)
-            else:
-                schema = "main"  # Fallback default
-        
+            schema = schemas[0] if schemas else "main"
+
         # Use Rison encoding for the q parameter
         params = {"q": f"(schema_name:{schema})"}
 
@@ -100,10 +97,10 @@ class DatabaseService:
             f"/database/{database_id}/tables/",
             params=params,
         )
-        
+
         # Response format: {"result": [{"value": "table_name", "type": "table", ...}]}
         result = response.get("result", [])
-        
+
         tables = []
         for item in result:
             # Handle different response formats
@@ -115,19 +112,21 @@ class DatabaseService:
                 name = str(item)
                 table_type = "table"
                 table_schema = schema
-            
-            tables.append(TableInfo(
-                name=name,
-                schema=table_schema,
-                type=table_type,
-            ))
-        
+
+            tables.append(
+                TableInfo(
+                    name=name,
+                    schema=table_schema,
+                    type=table_type,
+                )
+            )
+
         return tables
 
     async def list_schemas(self, database_id: int) -> list[str]:
         """
         List schemas in a database.
-        
+
         GET /api/v1/database/{id}/schemas/
         """
         response = await self.client.get(f"/database/{database_id}/schemas/")
@@ -137,15 +136,15 @@ class DatabaseService:
     async def find_by_name(self, name: str) -> DatabaseInfo | None:
         """
         Find a database by name.
-        
+
         Returns None if not found.
         """
         filters = [{"col": "database_name", "opr": "eq", "value": name}]
         params = {"q": json.dumps({"filters": filters})}
-        
+
         response = await self.client.get("/database/", params=params)
         result = response.get("result", [])
-        
+
         if result:
             return DatabaseInfo.model_validate(result[0])
         return None

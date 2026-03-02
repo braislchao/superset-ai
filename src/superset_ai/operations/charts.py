@@ -453,10 +453,7 @@ async def list_all_charts(chart_svc: ChartService) -> list[dict[str, Any]]:
         List of dicts with ``id``, ``title``, and ``type``.
     """
     charts = await chart_svc.list_charts()
-    return [
-        {"id": c.id, "title": c.slice_name, "type": c.viz_type}
-        for c in charts
-    ]
+    return [{"id": c.id, "title": c.slice_name, "type": c.viz_type} for c in charts]
 
 
 async def delete_chart(

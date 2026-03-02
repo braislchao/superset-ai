@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class ChartService:
     """
     Service for managing Superset charts.
-    
+
     Wraps /api/v1/chart/ endpoints with typed interfaces
     and provides builders for chart params.
     """
@@ -55,7 +55,7 @@ class ChartService:
     ) -> list[ChartInfo]:
         """
         List all charts, optionally filtered by datasource.
-        
+
         GET /api/v1/chart/
         """
         params: dict = {
@@ -68,14 +68,14 @@ class ChartService:
             params["q"] = json.dumps({"filters": filters})
 
         response = await self.client.get("/chart/", params=params)
-        
+
         result = response.get("result", [])
         return [ChartInfo.model_validate(item) for item in result]
 
     async def get_chart(self, chart_id: int) -> ChartDetail:
         """
         Get detailed information about a chart.
-        
+
         GET /api/v1/chart/{id}
         """
         response = await self.client.get(f"/chart/{chart_id}")
@@ -85,7 +85,7 @@ class ChartService:
     async def create_chart(self, spec: ChartCreate) -> ChartDetail:
         """
         Create a new chart.
-        
+
         POST /api/v1/chart/
 
         After creation, updates the stored ``query_context`` with the
@@ -93,10 +93,10 @@ class ChartService:
         rendering work correctly.
         """
         payload = spec.model_dump(exclude_none=True)
-        
+
         logger.info("Creating chart: %s (%s)", spec.slice_name, spec.viz_type)
         response = await self.client.post("/chart/", json=payload)
-        
+
         chart_id = response.get("id")
         if chart_id:
             # Patch query_context with the real slice_id now that we know it.
@@ -109,13 +109,13 @@ class ChartService:
                         json={"query_context": json.dumps(qc)},
                     )
                 except (json.JSONDecodeError, Exception):
-                    logger.debug(
+                    logger.warning(
                         "Failed to update query_context with slice_id for chart %d",
                         chart_id,
                         exc_info=True,
                     )
             return await self.get_chart(chart_id)
-        
+
         result = response.get("result", response)
         return ChartDetail.model_validate(result)
 
@@ -126,20 +126,20 @@ class ChartService:
     ) -> ChartDetail:
         """
         Update an existing chart.
-        
+
         PUT /api/v1/chart/{id}
         """
         payload = spec.model_dump(exclude_none=True)
-        
+
         logger.info("Updating chart %d", chart_id)
         await self.client.put(f"/chart/{chart_id}", json=payload)
-        
+
         return await self.get_chart(chart_id)
 
     async def delete_chart(self, chart_id: int) -> None:
         """
         Delete a chart.
-        
+
         DELETE /api/v1/chart/{id}
         """
         logger.info("Deleting chart %d", chart_id)
@@ -152,31 +152,31 @@ class ChartService:
     ) -> ChartDetail:
         """
         Associate a chart with dashboards.
-        
+
         This updates the chart's dashboards field to include the specified
         dashboard IDs, preserving any existing associations.
-        
+
         Args:
             chart_id: ID of the chart to update
             dashboard_ids: List of dashboard IDs to associate
-        
+
         Returns:
             Updated chart details
         """
         # Get current chart to preserve existing dashboard associations
         chart = await self.get_chart(chart_id)
         existing_dashboard_ids = [d.get("id") for d in chart.dashboards if d.get("id")]
-        
+
         # Merge with new dashboard IDs (avoid duplicates)
         all_dashboard_ids = list(existing_dashboard_ids)
         for dashboard_id in dashboard_ids:
             if dashboard_id not in all_dashboard_ids:
                 all_dashboard_ids.append(dashboard_id)
-        
+
         # Update the chart
         logger.info("Adding chart %d to dashboards: %s", chart_id, dashboard_ids)
         await self.client.put(f"/chart/{chart_id}", json={"dashboards": all_dashboard_ids})
-        
+
         return await self.get_chart(chart_id)
 
     # =========================================================================
@@ -196,7 +196,7 @@ class ChartService:
     ) -> ChartDetail:
         """
         Create a bar chart with simplified parameters.
-        
+
         Args:
             title: Chart title
             datasource_id: Dataset ID
@@ -213,7 +213,7 @@ class ChartService:
             time_column=time_column,
             time_range=time_range,
         )
-        
+
         spec = self._build_spec(
             title=title,
             viz_type="dist_bar",
@@ -221,7 +221,7 @@ class ChartService:
             params=params,
             description=description,
         )
-        
+
         return await self.create_chart(spec)
 
     async def create_line_chart(
@@ -238,7 +238,7 @@ class ChartService:
     ) -> ChartDetail:
         """
         Create a line/timeseries chart.
-        
+
         Args:
             title: Chart title
             datasource_id: Dataset ID
@@ -257,7 +257,7 @@ class ChartService:
             time_grain=time_grain,
             time_range=time_range,
         )
-        
+
         spec = self._build_spec(
             title=title,
             viz_type="line",
@@ -265,7 +265,7 @@ class ChartService:
             params=params,
             description=description,
         )
-        
+
         return await self.create_chart(spec)
 
     async def create_pie_chart(
@@ -280,7 +280,7 @@ class ChartService:
     ) -> ChartDetail:
         """
         Create a pie chart.
-        
+
         Args:
             title: Chart title
             datasource_id: Dataset ID
@@ -295,7 +295,7 @@ class ChartService:
             groupby=groupby,
             time_range=time_range,
         )
-        
+
         spec = self._build_spec(
             title=title,
             viz_type="pie",
@@ -303,7 +303,7 @@ class ChartService:
             params=params,
             description=description,
         )
-        
+
         return await self.create_chart(spec)
 
     async def create_table(
@@ -320,7 +320,7 @@ class ChartService:
     ) -> ChartDetail:
         """
         Create a table visualization.
-        
+
         Args:
             title: Chart title
             datasource_id: Dataset ID
@@ -339,7 +339,7 @@ class ChartService:
             time_range=time_range,
             row_limit=row_limit,
         )
-        
+
         spec = self._build_spec(
             title=title,
             viz_type="table",
@@ -347,7 +347,7 @@ class ChartService:
             params=params,
             description=description,
         )
-        
+
         return await self.create_chart(spec)
 
     async def create_big_number(
@@ -362,7 +362,7 @@ class ChartService:
     ) -> ChartDetail:
         """
         Create a big number/KPI visualization.
-        
+
         Args:
             title: Chart title
             datasource_id: Dataset ID
@@ -377,7 +377,7 @@ class ChartService:
             time_column=time_column,
             time_range=time_range,
         )
-        
+
         spec = self._build_spec(
             title=title,
             viz_type="big_number_total",
@@ -385,7 +385,7 @@ class ChartService:
             params=params,
             description=description,
         )
-        
+
         return await self.create_chart(spec)
 
     # =========================================================================
@@ -850,7 +850,8 @@ class ChartService:
             datasource_id=datasource_id,
             params=params.to_json(),
             query_context=build_query_context(
-                params, datasource_id=datasource_id,
+                params,
+                datasource_id=datasource_id,
             ),
             description=description,
         )
@@ -858,7 +859,7 @@ class ChartService:
     def _normalize_metrics(self, metrics: list[str]) -> list[str | dict[str, Any]]:
         """
         Normalize metric specifications.
-        
+
         Handles both simple column references and aggregation expressions.
         """
         normalized = []
@@ -869,7 +870,7 @@ class ChartService:
     def _normalize_single_metric(self, metric: str) -> str | dict[str, Any]:
         """
         Normalize a single metric specification.
-        
+
         Supported formats:
         - "column_name" → COUNT(column_name)
         - "COUNT(column)" → adhoc metric
@@ -877,17 +878,16 @@ class ChartService:
         - "count" → COUNT(*)
         """
         metric_upper = metric.upper().strip()
-        
+
         # Handle COUNT(*)
         if metric_upper in ("COUNT", "COUNT(*)"):
             return build_adhoc_metric("*", "COUNT", "COUNT(*)")
-        
+
         # Handle aggregation expressions like SUM(column)
         for agg in ("COUNT", "SUM", "AVG", "MAX", "MIN"):
             if metric_upper.startswith(f"{agg}(") and metric_upper.endswith(")"):
-                col = metric[len(agg)+1:-1].strip()
+                col = metric[len(agg) + 1 : -1].strip()
                 return build_adhoc_metric(col, agg, metric)
-        
+
         # Assume it's a pre-defined metric name
         return metric
-

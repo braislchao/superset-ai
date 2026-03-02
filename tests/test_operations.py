@@ -3,123 +3,34 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, patch
 
 from superset_ai.operations import charts as chart_ops
 from superset_ai.operations import dashboards as dashboard_ops
 from superset_ai.operations import datasets as dataset_ops
 from superset_ai.operations import discovery as discovery_ops
 from superset_ai.schemas.charts import ChartUpdate
-
-
-# ---------------------------------------------------------------------------
-# Helpers – mock object factories
-# ---------------------------------------------------------------------------
-
-
-def _make_db(id: int = 1, database_name: str = "main", backend: str = "postgresql"):
-    m = MagicMock()
-    m.id = id
-    m.database_name = database_name
-    m.backend = backend
-    return m
-
-
-def _make_table(name: str = "users", schema_: str = "public", type: str = "TABLE"):
-    m = MagicMock()
-    m.name = name
-    m.schema_ = schema_
-    m.type = type
-    return m
-
-
-def _make_column(
-    column_name: str = "id",
-    type: str = "INTEGER",
-    is_dttm: bool = False,
-    type_generic: int = 0,
-    filterable: bool = True,
-    groupby: bool = True,
-):
-    m = MagicMock()
-    m.column_name = column_name
-    m.type = type
-    m.is_dttm = is_dttm
-    m.type_generic = type_generic
-    m.filterable = filterable
-    m.groupby = groupby
-    return m
-
-
-def _make_dataset_info(
-    id: int = 10,
-    table_name: str = "orders",
-    database_id: int = 1,
-    schema_: str = "public",
-):
-    m = MagicMock()
-    m.id = id
-    m.table_name = table_name
-    m.database_id = database_id
-    m.schema_ = schema_
-    return m
-
-
-def _make_dataset_detail(
-    id: int = 10,
-    table_name: str = "orders",
-    columns: list | None = None,
-):
-    m = MagicMock()
-    m.id = id
-    m.table_name = table_name
-    m.columns = columns or []
-    return m
-
-
-def _make_chart(
-    id: int = 1,
-    slice_name: str = "My Chart",
-    viz_type: str = "echarts_timeseries_bar",
-    datasource_id: int = 10,
-    description: str = "",
-    dashboards: list | None = None,
-    params: dict | None = None,
-):
-    m = MagicMock()
-    m.id = id
-    m.slice_name = slice_name
-    m.viz_type = viz_type
-    m.datasource_id = datasource_id
-    m.description = description
-    m.dashboards = dashboards or []
-    m.get_params.return_value = params or {}
-    return m
-
-
-def _make_dashboard(
-    id: int = 1,
-    dashboard_title: str = "My Dashboard",
-    published: bool = True,
-    slug: str | None = None,
-    css: str | None = None,
-    charts: list | None = None,
-    position: dict | None = None,
-    metadata: dict | None = None,
-):
-    m = MagicMock()
-    m.id = id
-    m.dashboard_title = dashboard_title
-    m.published = published
-    m.slug = slug
-    m.css = css
-    m.charts = charts or []
-    m.get_position.return_value = position or {}
-    m.get_metadata.return_value = metadata or {}
-    return m
-
+from tests.conftest import (
+    make_mock_chart as _make_chart,
+)
+from tests.conftest import (
+    make_mock_column as _make_column,
+)
+from tests.conftest import (
+    make_mock_dashboard as _make_dashboard,
+)
+from tests.conftest import (
+    make_mock_dataset_detail as _make_dataset_detail,
+)
+from tests.conftest import (
+    make_mock_dataset_info as _make_dataset_info,
+)
+from tests.conftest import (
+    make_mock_db as _make_db,
+)
+from tests.conftest import (
+    make_mock_table as _make_table,
+)
 
 # ===========================================================================
 # Discovery operations
@@ -219,12 +130,20 @@ class TestDiscoveryOps:
         assert len(result["columns"]) == 4
 
         assert result["columns"][0] == {
-            "name": "id", "type": "INTEGER", "is_time": False,
-            "filterable": True, "groupby": True, "type_generic": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "is_time": False,
+            "filterable": True,
+            "groupby": True,
+            "type_generic": 0,
         }
         assert result["columns"][1] == {
-            "name": "created_at", "type": "TIMESTAMP", "is_time": True,
-            "filterable": True, "groupby": True, "type_generic": 2,
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "is_time": True,
+            "filterable": True,
+            "groupby": True,
+            "type_generic": 2,
         }
 
         assert result["time_columns"] == ["created_at"]
@@ -335,6 +254,7 @@ class TestDiscoveryOps:
         """profile_dataset returns row_count, cardinality, nulls, and sample values."""
         db_svc = AsyncMock()
         ds_svc = AsyncMock()
+        db_svc.get_database.return_value = _make_db(1, "main", "postgresql")
 
         cols = [
             _make_column("id", "INTEGER", is_dttm=False, type_generic=0),
@@ -347,46 +267,46 @@ class TestDiscoveryOps:
         ds_svc.get_dataset.return_value = detail
 
         # COUNT(*) query
-        db_svc.execute_sql = AsyncMock(side_effect=[
-            # 1) row count
-            {
-                "columns": [{"name": "cnt"}],
-                "data": [{"cnt": 100}],
-            },
-            # 2) cardinality + nulls
-            {
-                "columns": [
-                    {"name": "id__cardinality"},
-                    {"name": "id__nulls"},
-                    {"name": "name__cardinality"},
-                    {"name": "name__nulls"},
-                    {"name": "created_at__cardinality"},
-                    {"name": "created_at__nulls"},
-                ],
-                "data": [
-                    {
-                        "id__cardinality": 100,
-                        "id__nulls": 0,
-                        "name__cardinality": 50,
-                        "name__nulls": 3,
-                        "created_at__cardinality": 90,
-                        "created_at__nulls": 1,
-                    }
-                ],
-            },
-            # 3) sample
-            {
-                "columns": [{"name": "id"}, {"name": "name"}, {"name": "created_at"}],
-                "data": [
-                    {"id": 1, "name": "Alice", "created_at": "2024-01-01"},
-                    {"id": 2, "name": "Bob", "created_at": "2024-01-02"},
-                ],
-            },
-        ])
-
-        result = await discovery_ops.profile_dataset(
-            db_svc, ds_svc, dataset_id=10, sample_size=2
+        db_svc.execute_sql = AsyncMock(
+            side_effect=[
+                # 1) row count
+                {
+                    "columns": [{"name": "cnt"}],
+                    "data": [{"cnt": 100}],
+                },
+                # 2) cardinality + nulls
+                {
+                    "columns": [
+                        {"name": "id__cardinality"},
+                        {"name": "id__nulls"},
+                        {"name": "name__cardinality"},
+                        {"name": "name__nulls"},
+                        {"name": "created_at__cardinality"},
+                        {"name": "created_at__nulls"},
+                    ],
+                    "data": [
+                        {
+                            "id__cardinality": 100,
+                            "id__nulls": 0,
+                            "name__cardinality": 50,
+                            "name__nulls": 3,
+                            "created_at__cardinality": 90,
+                            "created_at__nulls": 1,
+                        }
+                    ],
+                },
+                # 3) sample
+                {
+                    "columns": [{"name": "id"}, {"name": "name"}, {"name": "created_at"}],
+                    "data": [
+                        {"id": 1, "name": "Alice", "created_at": "2024-01-01"},
+                        {"id": 2, "name": "Bob", "created_at": "2024-01-02"},
+                    ],
+                },
+            ]
         )
+
+        result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=10, sample_size=2)
 
         assert result["dataset_id"] == 10
         assert result["table_name"] == "users"
@@ -427,6 +347,7 @@ class TestDiscoveryOps:
         """profile_dataset returns empty columns when dataset has none."""
         db_svc = AsyncMock()
         ds_svc = AsyncMock()
+        db_svc.get_database.return_value = _make_db(2, "main", "postgresql")
 
         detail = _make_dataset_detail(7, "empty_table", [])
         detail.database_id = 2
@@ -444,6 +365,7 @@ class TestDiscoveryOps:
         """profile_dataset qualifies table name with schema."""
         db_svc = AsyncMock()
         ds_svc = AsyncMock()
+        db_svc.get_database.return_value = _make_db(3, "main", "postgresql")
 
         cols = [_make_column("val", "INT", type_generic=0)]
         detail = _make_dataset_detail(8, "metrics", cols)
@@ -451,25 +373,27 @@ class TestDiscoveryOps:
         detail.schema_ = "analytics"
         ds_svc.get_dataset.return_value = detail
 
-        db_svc.execute_sql = AsyncMock(side_effect=[
-            {"columns": [{"name": "cnt"}], "data": [{"cnt": 50}]},
-            {
-                "columns": [{"name": "val__cardinality"}, {"name": "val__nulls"}],
-                "data": [{"val__cardinality": 10, "val__nulls": 0}],
-            },
-            {
-                "columns": [{"name": "val"}],
-                "data": [{"val": 42}],
-            },
-        ])
+        db_svc.execute_sql = AsyncMock(
+            side_effect=[
+                {"columns": [{"name": "cnt"}], "data": [{"cnt": 50}]},
+                {
+                    "columns": [{"name": "val__cardinality"}, {"name": "val__nulls"}],
+                    "data": [{"val__cardinality": 10, "val__nulls": 0}],
+                },
+                {
+                    "columns": [{"name": "val"}],
+                    "data": [{"val": 42}],
+                },
+            ]
+        )
 
         result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=8)
 
-        # Verify SQL queries used qualified table name
+        # Verify SQL queries used qualified, quoted table name
         calls = db_svc.execute_sql.call_args_list
-        assert "analytics.metrics" in calls[0].args[1]  # COUNT(*)
-        assert "analytics.metrics" in calls[1].args[1]  # stats
-        assert "analytics.metrics" in calls[2].args[1]  # sample
+        assert '"analytics"."metrics"' in calls[0].args[1]  # COUNT(*)
+        assert '"analytics"."metrics"' in calls[1].args[1]  # stats
+        assert '"analytics"."metrics"' in calls[2].args[1]  # sample
 
         assert result["row_count"] == 50
 
@@ -477,6 +401,7 @@ class TestDiscoveryOps:
         """profile_dataset handles table with zero rows."""
         db_svc = AsyncMock()
         ds_svc = AsyncMock()
+        db_svc.get_database.return_value = _make_db(1, "main", "postgresql")
 
         cols = [_make_column("x", "TEXT", type_generic=1)]
         detail = _make_dataset_detail(9, "empty", cols)
@@ -484,14 +409,16 @@ class TestDiscoveryOps:
         detail.schema_ = None
         ds_svc.get_dataset.return_value = detail
 
-        db_svc.execute_sql = AsyncMock(side_effect=[
-            {"columns": [{"name": "cnt"}], "data": [{"cnt": 0}]},
-            {
-                "columns": [{"name": "x__cardinality"}, {"name": "x__nulls"}],
-                "data": [{"x__cardinality": 0, "x__nulls": 0}],
-            },
-            {"columns": [{"name": "x"}], "data": []},
-        ])
+        db_svc.execute_sql = AsyncMock(
+            side_effect=[
+                {"columns": [{"name": "cnt"}], "data": [{"cnt": 0}]},
+                {
+                    "columns": [{"name": "x__cardinality"}, {"name": "x__nulls"}],
+                    "data": [{"x__cardinality": 0, "x__nulls": 0}],
+                },
+                {"columns": [{"name": "x"}], "data": []},
+            ]
+        )
 
         result = await discovery_ops.profile_dataset(db_svc, ds_svc, dataset_id=9)
 
@@ -567,7 +494,9 @@ class TestChartOps:
     async def test_create_bar_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_bar_chart.return_value = _make_chart(
-            id=1, slice_name="Revenue by Region", viz_type="echarts_timeseries_bar",
+            id=1,
+            slice_name="Revenue by Region",
+            viz_type="echarts_timeseries_bar",
         )
 
         result = await chart_ops.create_bar_chart(
@@ -596,7 +525,9 @@ class TestChartOps:
     async def test_create_line_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_line_chart.return_value = _make_chart(
-            id=2, slice_name="Sales Trend", viz_type="echarts_timeseries_line",
+            id=2,
+            slice_name="Sales Trend",
+            viz_type="echarts_timeseries_line",
         )
 
         result = await chart_ops.create_line_chart(
@@ -625,7 +556,9 @@ class TestChartOps:
     async def test_create_pie_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_pie_chart.return_value = _make_chart(
-            id=3, slice_name="Market Share", viz_type="pie",
+            id=3,
+            slice_name="Market Share",
+            viz_type="pie",
         )
 
         result = await chart_ops.create_pie_chart(
@@ -649,7 +582,9 @@ class TestChartOps:
     async def test_create_table_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_table.return_value = _make_chart(
-            id=4, slice_name="User Table", viz_type="table",
+            id=4,
+            slice_name="User Table",
+            viz_type="table",
         )
 
         result = await chart_ops.create_table_chart(
@@ -675,7 +610,9 @@ class TestChartOps:
     async def test_create_bubble_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_bubble_chart.return_value = _make_chart(
-            id=5, slice_name="Bubble", viz_type="bubble",
+            id=5,
+            slice_name="Bubble",
+            viz_type="bubble",
         )
 
         result = await chart_ops.create_bubble_chart(
@@ -707,7 +644,9 @@ class TestChartOps:
     async def test_create_heatmap_chart(self):
         chart_svc = AsyncMock()
         chart_svc.create_heatmap.return_value = _make_chart(
-            id=6, slice_name="Heatmap", viz_type="heatmap",
+            id=6,
+            slice_name="Heatmap",
+            viz_type="heatmap",
         )
 
         result = await chart_ops.create_heatmap_chart(
@@ -766,7 +705,9 @@ class TestChartOps:
     async def test_update_chart(self):
         chart_svc = AsyncMock()
         chart_svc.update_chart.return_value = _make_chart(
-            id=42, slice_name="Updated KPI", viz_type="big_number",
+            id=42,
+            slice_name="Updated KPI",
+            viz_type="big_number",
         )
 
         result = await chart_ops.update_chart(
@@ -793,7 +734,9 @@ class TestChartOps:
     async def test_update_chart_with_all_fields(self):
         chart_svc = AsyncMock()
         chart_svc.update_chart.return_value = _make_chart(
-            id=10, slice_name="Full Update", viz_type="pie",
+            id=10,
+            slice_name="Full Update",
+            viz_type="pie",
         )
 
         await chart_ops.update_chart(
@@ -842,7 +785,8 @@ class TestChartOps:
     async def test_delete_chart_success(self):
         chart_svc = AsyncMock()
         chart_svc.get_chart.return_value = _make_chart(
-            id=42, slice_name="Doomed Chart",
+            id=42,
+            slice_name="Doomed Chart",
         )
 
         result = await chart_ops.delete_chart(chart_svc, chart_id=42)
@@ -857,7 +801,8 @@ class TestChartOps:
     async def test_delete_chart_failure(self):
         chart_svc = AsyncMock()
         chart_svc.get_chart.return_value = _make_chart(
-            id=42, slice_name="Problematic Chart",
+            id=42,
+            slice_name="Problematic Chart",
         )
         chart_svc.delete_chart.side_effect = Exception("Permission denied")
 
@@ -929,7 +874,8 @@ class TestDashboardOps:
     async def test_create_dashboard(self):
         dash_svc = AsyncMock()
         dash_svc.create_dashboard_with_charts.return_value = _make_dashboard(
-            id=10, dashboard_title="Sales Dashboard",
+            id=10,
+            dashboard_title="Sales Dashboard",
         )
 
         result = await dashboard_ops.create_dashboard(
@@ -977,7 +923,8 @@ class TestDashboardOps:
     async def test_create_tabbed_dashboard(self):
         dash_svc = AsyncMock()
         dash_svc.create_tabbed_dashboard.return_value = _make_dashboard(
-            id=20, dashboard_title="Tabbed Dash",
+            id=20,
+            dashboard_title="Tabbed Dash",
         )
 
         tabs = {"Overview": [1, 2], "Details": [3, 4]}
@@ -1006,7 +953,8 @@ class TestDashboardOps:
     async def test_add_chart_to_dashboard(self):
         dash_svc = AsyncMock()
         dash_svc.add_charts_to_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Sales Dashboard",
+            id=10,
+            dashboard_title="Sales Dashboard",
         )
 
         result = await dashboard_ops.add_chart_to_dashboard(
@@ -1155,7 +1103,8 @@ class TestDashboardOps:
     async def test_update_dashboard_title_only(self):
         dash_svc = AsyncMock()
         dash_svc.update_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="New Title",
+            id=10,
+            dashboard_title="New Title",
         )
 
         result = await dashboard_ops.update_dashboard(
@@ -1190,7 +1139,8 @@ class TestDashboardOps:
             metadata=existing_metadata,
         )
         dash_svc.update_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Dash",
+            id=10,
+            dashboard_title="Dash",
         )
 
         await dashboard_ops.update_dashboard(
@@ -1212,7 +1162,8 @@ class TestDashboardOps:
     async def test_update_dashboard_all_fields(self):
         dash_svc = AsyncMock()
         dash_svc.update_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Full",
+            id=10,
+            dashboard_title="Full",
         )
 
         await dashboard_ops.update_dashboard(
@@ -1224,8 +1175,6 @@ class TestDashboardOps:
             published=True,
             owners=[1],
         )
-
-        from superset_ai.schemas.dashboards import DashboardUpdate
 
         spec = dash_svc.update_dashboard.call_args[0][1]
         assert spec.dashboard_title == "Full"
@@ -1240,17 +1189,21 @@ class TestDashboardOps:
     async def test_remove_chart_from_dashboard(self):
         dash_svc = AsyncMock()
         dash_svc.remove_chart_from_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Sales Dashboard",
+            id=10,
+            dashboard_title="Sales Dashboard",
         )
 
         result = await dashboard_ops.remove_chart_from_dashboard(
-            dash_svc, dashboard_id=10, chart_id=5,
+            dash_svc,
+            dashboard_id=10,
+            chart_id=5,
         )
 
         assert result["id"] == 10
         assert result["message"] == "Removed chart 5 from dashboard 'Sales Dashboard'"
         dash_svc.remove_chart_from_dashboard.assert_called_once_with(
-            dashboard_id=10, chart_id=5,
+            dashboard_id=10,
+            chart_id=5,
         )
 
     # -- delete_dashboard --
@@ -1258,7 +1211,8 @@ class TestDashboardOps:
     async def test_delete_dashboard_success(self):
         dash_svc = AsyncMock()
         dash_svc.get_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Old Dashboard",
+            id=10,
+            dashboard_title="Old Dashboard",
         )
 
         result = await dashboard_ops.delete_dashboard(dash_svc, dashboard_id=10)
@@ -1273,7 +1227,8 @@ class TestDashboardOps:
     async def test_delete_dashboard_failure(self):
         dash_svc = AsyncMock()
         dash_svc.get_dashboard.return_value = _make_dashboard(
-            id=10, dashboard_title="Protected",
+            id=10,
+            dashboard_title="Protected",
         )
         dash_svc.delete_dashboard.side_effect = Exception("Forbidden")
 
@@ -1321,7 +1276,8 @@ class TestDashboardOps:
         ]
 
         result = await dashboard_ops.delete_all_charts_and_dashboards(
-            chart_svc, dash_svc,
+            chart_svc,
+            dash_svc,
         )
 
         assert result["success"] is True
@@ -1357,7 +1313,8 @@ class TestDashboardOps:
         chart_svc.delete_chart.side_effect = [None, Exception("in use"), None]
 
         result = await dashboard_ops.delete_all_charts_and_dashboards(
-            chart_svc, dash_svc,
+            chart_svc,
+            dash_svc,
         )
 
         assert result["success"] is False
@@ -1384,7 +1341,8 @@ class TestDashboardOps:
         chart_svc.list_charts.return_value = []
 
         result = await dashboard_ops.delete_all_charts_and_dashboards(
-            chart_svc, dash_svc,
+            chart_svc,
+            dash_svc,
         )
 
         assert result["success"] is True
@@ -1475,7 +1433,8 @@ class TestDashboardOps:
         assert result["filter_id"] == "NATIVE_FILTER-abc12345"
         assert "Removed filter" in result["message"]
         dash_svc.remove_native_filter.assert_called_once_with(
-            10, "NATIVE_FILTER-abc12345",
+            10,
+            "NATIVE_FILTER-abc12345",
         )
 
     # -- list_dashboard_filters --

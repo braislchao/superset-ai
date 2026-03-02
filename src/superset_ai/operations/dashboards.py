@@ -135,7 +135,7 @@ async def get_dashboard(
     # Extract chart IDs from position_json
     position = dashboard.get_position()
     chart_ids: list[int] = []
-    for key, value in position.items():
+    for _key, value in position.items():
         if isinstance(value, dict) and value.get("type") == "CHART":
             meta = value.get("meta", {})
             chart_id = meta.get("chartId")
@@ -308,9 +308,7 @@ async def delete_all_charts_and_dashboards(
     for d in dashboards:
         try:
             await dash_svc.delete_dashboard(d.id)
-            results["dashboards_deleted"].append(
-                {"id": d.id, "title": d.dashboard_title}
-            )
+            results["dashboards_deleted"].append({"id": d.id, "title": d.dashboard_title})
         except Exception as e:
             results["dashboards_failed"].append(
                 {"id": d.id, "title": d.dashboard_title, "error": str(e)}
@@ -321,19 +319,12 @@ async def delete_all_charts_and_dashboards(
     for c in charts:
         try:
             await chart_svc.delete_chart(c.id)
-            results["charts_deleted"].append(
-                {"id": c.id, "title": c.slice_name}
-            )
+            results["charts_deleted"].append({"id": c.id, "title": c.slice_name})
         except Exception as e:
-            results["charts_failed"].append(
-                {"id": c.id, "title": c.slice_name, "error": str(e)}
-            )
+            results["charts_failed"].append({"id": c.id, "title": c.slice_name, "error": str(e)})
 
     return {
-        "success": (
-            len(results["dashboards_failed"]) == 0
-            and len(results["charts_failed"]) == 0
-        ),
+        "success": (len(results["dashboards_failed"]) == 0 and len(results["charts_failed"]) == 0),
         "dashboards_deleted_count": len(results["dashboards_deleted"]),
         "charts_deleted_count": len(results["charts_deleted"]),
         "message": (
@@ -444,12 +435,14 @@ async def list_dashboard_filters(
         targets = f.get("targets", [{}])
         target = targets[0] if targets else {}
         col_info = target.get("column", {})
-        result.append({
-            "filter_id": f.get("id"),
-            "name": f.get("name"),
-            "filter_type": f.get("filterType"),
-            "column": col_info.get("name") if col_info else None,
-            "dataset_id": target.get("datasetId"),
-        })
+        result.append(
+            {
+                "filter_id": f.get("id"),
+                "name": f.get("name"),
+                "filter_type": f.get("filterType"),
+                "column": col_info.get("name") if col_info else None,
+                "dataset_id": target.get("datasetId"),
+            }
+        )
 
     return result

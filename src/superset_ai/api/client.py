@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class SupersetClient:
     """
     Central HTTP client for Superset API interactions.
-    
+
     Handles:
     - Authentication (JWT + CSRF tokens)
     - Automatic token refresh on 401
@@ -127,7 +127,7 @@ class SupersetClient:
     ) -> dict[str, Any]:
         """
         Make authenticated request to Superset API.
-        
+
         Handles:
         - Adding auth headers (JWT + CSRF)
         - Auto-retry on 401 (token expired)
@@ -165,11 +165,11 @@ class SupersetClient:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        
+
         # Only add Bearer token for JWT-based auth (not session-based)
         if not session.session_based and session.access_token:
             headers["Authorization"] = f"Bearer {session.access_token}"
-        
+
         # For session-based auth, apply session cookies to the client
         if session.session_based and self.auth.session_cookies:
             for name, value in self.auth.session_cookies.items():
@@ -286,8 +286,15 @@ class SupersetClient:
         try:
             return response.json()
         except Exception as e:
-            logger.warning("Failed to parse JSON response: %s", e)
-            return {"raw_response": response.text}
+            logger.error(
+                "Failed to parse JSON response (status %d): %s",
+                response.status_code,
+                e,
+            )
+            return {
+                "raw_response": response.text,
+                "status_code": response.status_code,
+            }
 
     def _extract_error_message(self, body: dict | str) -> str | None:
         """Extract error message from Superset error response."""

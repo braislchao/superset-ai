@@ -2,10 +2,47 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from superset_ai.api.databases import DatabaseService
 from superset_ai.api.datasets import DatasetService
+
+# Backends that use backtick quoting; everything else uses double-quote (ANSI SQL).
+_BACKTICK_BACKENDS = {"mysql", "sqlite"}
+
+# Pattern for valid SQL identifiers — rejects anything suspicious.
+_SAFE_IDENTIFIER_RE = re.compile(r"^[\w. ]+$", re.UNICODE)
+
+
+def quote_identifier(name: str, backend: str | None = None) -> str:
+    """Quote a SQL identifier (table or column name) for the given backend.
+
+    Uses backticks for MySQL/SQLite and double-quotes for everything else
+    (PostgreSQL, Presto, Trino, etc. — ANSI SQL standard).
+
+    Raises ``ValueError`` if *name* contains the quote character for the
+    target backend, preventing SQL injection via crafted identifiers.
+    """
+    if not _SAFE_IDENTIFIER_RE.match(name):
+        raise ValueError(f"Unsafe SQL identifier rejected: {name!r}")
+
+    if backend and backend.lower() in _BACKTICK_BACKENDS:
+        if "`" in name:
+            raise ValueError(f"Identifier contains backtick, cannot safely quote: {name!r}")
+        return f"`{name}`"
+
+    if '"' in name:
+        raise ValueError(f"Identifier contains double-quote, cannot safely quote: {name!r}")
+    return f'"{name}"'
+
+
+def quote_table(table_name: str, schema: str | None, backend: str | None = None) -> str:
+    """Build a fully-qualified, safely-quoted table reference."""
+    quoted_table = quote_identifier(table_name, backend)
+    if schema:
+        return f"{quote_identifier(schema, backend)}.{quoted_table}"
+    return quoted_table
 
 
 async def list_databases(db_svc: DatabaseService) -> list[dict[str, Any]]:
@@ -140,9 +177,7 @@ async def execute_sql(
     # Superset returns columns as list of dicts with "name" (and sometimes
     # "type"), and data as list of dicts keyed by column name.
     raw_columns = response.get("columns", [])
-    column_names = [
-        c["name"] if isinstance(c, dict) else str(c) for c in raw_columns
-    ]
+    column_names = [c["name"] if isinstance(c, dict) else str(c) for c in raw_columns]
 
     raw_data = response.get("data", [])
     # Normalise rows: convert list-of-dicts to list-of-lists in column order
@@ -195,9 +230,13 @@ async def profile_dataset(
             "error": "Dataset has no associated database_id",
         }
 
+    # Resolve the DB backend for correct identifier quoting
+    db_info = await db_svc.get_database(database_id)
+    backend = db_info.backend
+
     # Qualify table name with schema if available
     schema = dataset.schema_
-    qualified_table = f"{schema}.{table_name}" if schema else table_name
+    qualified_table = quote_table(table_name, schema, backend)
 
     col_names = [col.column_name for col in dataset.columns]
 
@@ -213,15 +252,16 @@ async def profile_dataset(
     count_result = await execute_sql(
         db_svc, database_id, f"SELECT COUNT(*) AS cnt FROM {qualified_table}"
     )
-    row_count = (
-        count_result["data"][0][0] if count_result["data"] else 0
-    )
+    row_count = count_result["data"][0][0] if count_result["data"] else 0
 
     # 3. Cardinality + null counts in a single query
     parts = []
     for col in col_names:
-        parts.append(f"COUNT(DISTINCT \"{col}\") AS \"{col}__cardinality\"")
-        parts.append(f"SUM(CASE WHEN \"{col}\" IS NULL THEN 1 ELSE 0 END) AS \"{col}__nulls\"")
+        qcol = quote_identifier(col, backend)
+        alias_card = quote_identifier(f"{col}__cardinality", backend)
+        alias_nulls = quote_identifier(f"{col}__nulls", backend)
+        parts.append(f"COUNT(DISTINCT {qcol}) AS {alias_card}")
+        parts.append(f"SUM(CASE WHEN {qcol} IS NULL THEN 1 ELSE 0 END) AS {alias_nulls}")
 
     stats_sql = f"SELECT {', '.join(parts)} FROM {qualified_table}"
     stats_result = await execute_sql(db_svc, database_id, stats_sql)
@@ -234,9 +274,7 @@ async def profile_dataset(
 
     # 4. Sample values
     sample_sql = f"SELECT * FROM {qualified_table} LIMIT {sample_size}"
-    sample_result = await execute_sql(
-        db_svc, database_id, sample_sql, limit=sample_size
-    )
+    sample_result = await execute_sql(db_svc, database_id, sample_sql, limit=sample_size)
 
     # Build per-column sample values
     sample_by_col: dict[str, list[Any]] = {col: [] for col in col_names}
@@ -249,14 +287,16 @@ async def profile_dataset(
     column_profiles = []
     for col_obj in dataset.columns:
         name = col_obj.column_name
-        column_profiles.append({
-            "name": name,
-            "type": col_obj.type,
-            "is_time": col_obj.is_dttm,
-            "cardinality": stats_row.get(f"{name}__cardinality"),
-            "null_count": stats_row.get(f"{name}__nulls"),
-            "sample_values": sample_by_col.get(name, []),
-        })
+        column_profiles.append(
+            {
+                "name": name,
+                "type": col_obj.type,
+                "is_time": col_obj.is_dttm,
+                "cardinality": stats_row.get(f"{name}__cardinality"),
+                "null_count": stats_row.get(f"{name}__nulls"),
+                "sample_values": sample_by_col.get(name, []),
+            }
+        )
 
     return {
         "dataset_id": dataset_id,

@@ -36,7 +36,7 @@ class SupersetConfig(BaseSettings):
         default="copilot",
         description="LLM provider to use: 'openai' or 'copilot' (GitHub Copilot)",
     )
-    
+
     # OpenAI configuration (used when llm_provider='openai')
     openai_api_key: SecretStr | None = Field(
         default=None,
@@ -46,7 +46,7 @@ class SupersetConfig(BaseSettings):
         default="gpt-4o",
         description="OpenAI model to use for the agent",
     )
-    
+
     # GitHub Copilot configuration (used when llm_provider='copilot')
     # NOTE: Some models like gpt-5.2 return incomplete token usage metadata that
     # breaks langchain-openai v1.1.10. Known working models: gpt-4o, claude-sonnet-4.6
@@ -79,7 +79,7 @@ class SupersetConfig(BaseSettings):
     def api_base_url(self) -> str:
         """Return the base URL for API endpoints."""
         return f"{self.superset_base_url.rstrip('/')}/api/v1"
-    
+
     def get_llm_api_key(self) -> str:
         """Get the API key for the configured LLM provider."""
         if self.llm_provider == "openai":
@@ -88,14 +88,15 @@ class SupersetConfig(BaseSettings):
             return self.openai_api_key.get_secret_value()
         else:  # copilot
             from superset_ai.core.copilot_auth import get_copilot_token
+
             return get_copilot_token()
-    
+
     def get_llm_base_url(self) -> str | None:
         """Get the base URL for the LLM API."""
         if self.llm_provider == "copilot":
             return "https://api.githubcopilot.com"
         return None  # Use default OpenAI URL
-    
+
     def get_llm_model(self) -> str:
         """Get the model name for the configured provider."""
         if self.llm_provider == "copilot":

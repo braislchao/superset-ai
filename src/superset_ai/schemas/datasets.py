@@ -56,11 +56,11 @@ class DatasetDetail(TimestampMixin, BaseSchema):
     sql: str | None = None
     kind: str | None = None
     is_sqllab_view: bool = False
-    
+
     # Column and metric details
     columns: list[ColumnInfo] = Field(default_factory=list)
     metrics: list[MetricInfo] = Field(default_factory=list)
-    
+
     # Additional metadata
     main_dttm_col: str | None = None
     default_endpoint: str | None = None
@@ -72,7 +72,7 @@ class DatasetDetail(TimestampMixin, BaseSchema):
     extra: str | None = None
     normalize_columns: bool = False
     always_filter_main_dttm: bool = False
-    
+
     owners: list[OwnerInfo] = Field(default_factory=list)
 
     @field_validator("database_id", mode="before")
