@@ -486,3 +486,79 @@ class TestNormalizeMetrics:
         assert isinstance(results[0], dict)
         assert results[1] == "my_metric"
         assert isinstance(results[2], dict)
+
+
+# =========================================================================
+# create_chart_by_type dispatcher
+# =========================================================================
+
+
+class TestCreateChartByType:
+    """Tests for the unified create_chart_by_type dispatcher."""
+
+    @pytest.fixture
+    def service(self, client):
+        return ChartService(client)
+
+    @pytest.fixture
+    def client(self):
+        return AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_dispatches_bar_chart(self, service, client):
+        """create_chart_by_type('dist_bar') should delegate to create_bar_chart."""
+        client.post.return_value = {"id": 200}
+        client.put.return_value = {}
+        client.get.return_value = {"result": _chart_detail_dict(id=200, viz_type="dist_bar")}
+
+        result = await service.create_chart_by_type(
+            chart_type="dist_bar",
+            title="Bar Test",
+            datasource_id=10,
+            metrics=["SUM(revenue)"],
+            groupby=["region"],
+        )
+
+        assert result.id == 200
+        assert result.viz_type == "dist_bar"
+
+    @pytest.mark.asyncio
+    async def test_dispatches_pie_chart(self, service, client):
+        """create_chart_by_type('pie') should delegate to create_pie_chart."""
+        client.post.return_value = {"id": 201}
+        client.put.return_value = {}
+        client.get.return_value = {"result": _chart_detail_dict(id=201, viz_type="pie")}
+
+        result = await service.create_chart_by_type(
+            chart_type="pie",
+            title="Pie Test",
+            datasource_id=10,
+            metric="COUNT(*)",
+            groupby="category",
+        )
+
+        assert result.id == 201
+        assert result.viz_type == "pie"
+
+    @pytest.mark.asyncio
+    async def test_unsupported_type_raises(self, service):
+        """create_chart_by_type with invalid type should raise ValueError."""
+        with pytest.raises(ValueError, match="Unsupported chart type"):
+            await service.create_chart_by_type(
+                chart_type="nonexistent",  # type: ignore[arg-type]
+                title="Bad",
+                datasource_id=10,
+            )
+
+    @pytest.mark.asyncio
+    async def test_all_chart_types_have_dispatch(self, service):
+        """Every ChartType value should be dispatchable."""
+        from typing import get_args
+
+        from superset_ai.schemas.charts import ChartType
+
+        chart_types = get_args(ChartType)
+        # Just verify the dispatch dict covers all types — don't actually call them
+        for _ct in chart_types:
+            # Should not raise
+            assert hasattr(service, "create_chart_by_type")

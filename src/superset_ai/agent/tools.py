@@ -16,6 +16,7 @@ from superset_ai.operations import charts as chart_ops
 from superset_ai.operations import dashboards as dashboard_ops
 from superset_ai.operations import datasets as dataset_ops
 from superset_ai.operations import discovery as discovery_ops
+from superset_ai.schemas.charts import ChartType
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,49 @@ async def profile_dataset(
     """
     ctx = get_tool_context()
     return await discovery_ops.profile_dataset(ctx.databases, ctx.datasets, dataset_id, sample_size)
+
+
+@tool
+async def suggest_chart_type(
+    dataset_id: int,
+    sample_size: int = 5,
+) -> dict[str, Any]:
+    """
+    Suggest appropriate chart types for a dataset based on its column profiles.
+
+    Profiles the dataset (row count, column types, cardinality, nulls, sample
+    values) and then recommends chart types ordered by relevance, along with
+    example parameter hints for each.
+
+    Use this BEFORE creating charts to pick the best visualization.
+
+    Args:
+        dataset_id: The dataset to analyze
+        sample_size: Number of sample values to retrieve per column (default 5)
+
+    Returns a dict with:
+        - ``dataset_id``, ``table_name``, ``row_count``, ``columns`` — the profile
+        - ``recommendations`` — ordered list of chart type suggestions with
+          ``chart_type``, ``reason``, and ``suggested_params``
+    """
+    ctx = get_tool_context()
+    profile = await discovery_ops.profile_dataset(
+        ctx.databases, ctx.datasets, dataset_id, sample_size
+    )
+
+    # If profiling failed (e.g. no database_id), return the error as-is
+    if "error" in profile:
+        return profile
+
+    recommendations = discovery_ops.suggest_chart_type(
+        columns=profile["columns"],
+        row_count=profile.get("row_count", 0),
+    )
+
+    return {
+        **profile,
+        "recommendations": recommendations,
+    }
 
 
 # =============================================================================
@@ -357,7 +401,7 @@ async def create_table_chart(
 
 
 @tool
-async def create_metric_chart(
+async def create_big_number_total_chart(
     title: str,
     dataset_id: int,
     metric: str,
@@ -378,7 +422,9 @@ async def create_metric_chart(
     Returns the created chart information.
     """
     ctx = get_tool_context()
-    result = await chart_ops.create_metric_chart(ctx.charts, title, dataset_id, metric, time_range)
+    result = await chart_ops.create_big_number_total_chart(
+        ctx.charts, title, dataset_id, metric, time_range
+    )
     ctx.session.add_asset("chart", result["id"], result["title"])
     return result
 
@@ -1202,6 +1248,133 @@ async def list_dashboard_filters(
 
 
 # =============================================================================
+# Unified Chart Creation Tool
+# =============================================================================
+
+
+@tool
+async def create_chart(
+    chart_type: ChartType,
+    title: str,
+    dataset_id: int,
+    metrics: list[str] | None = None,
+    metric: str | None = None,
+    dimensions: list[str] | None = None,
+    dimension: str | None = None,
+    columns: list[str] | None = None,
+    time_column: str | None = None,
+    time_grain: str | None = None,
+    time_range: str = "No filter",
+    # Bubble-specific
+    x_metric: str | None = None,
+    y_metric: str | None = None,
+    size_metric: str | None = None,
+    series_column: str | None = None,
+    entity_column: str | None = None,
+    max_bubble_size: int | None = None,
+    # Histogram-specific
+    column: str | None = None,
+    num_bins: int | None = None,
+    normalized: bool | None = None,
+    # Gauge-specific
+    min_val: float | None = None,
+    max_val: float | None = None,
+    # Box plot-specific
+    whisker_options: str | None = None,
+    # Area / timeseries bar-specific
+    stacked: bool | None = None,
+    # Funnel-specific
+    sort_by_metric: bool | None = None,
+    # Heatmap-specific
+    x_column: str | None = None,
+    y_column: str | None = None,
+    linear_color_scheme: str | None = None,
+    normalize_across: str | None = None,
+    show_values: bool | None = None,
+    # Table-specific
+    row_limit: int | None = None,
+) -> dict[str, Any]:
+    """Create a chart visualization of any supported type.
+
+    Supported chart types and their REQUIRED parameters:
+
+    - **dist_bar** (bar chart): metrics, dimensions
+    - **line** (line chart): metrics, time_column; optional: dimensions, time_grain="P1D"
+    - **pie**: metric, dimension
+    - **table**: columns; optional: metrics, dimensions, row_limit=1000
+    - **big_number_total** (single KPI): metric
+    - **area** (filled line): metrics, time_column; optional: dimensions, time_grain="P1D", stacked=True
+    - **big_number** (KPI with trendline): metric, time_column; optional: time_grain="P1D"
+    - **echarts_timeseries_bar** (bar over time): metrics, time_column; optional: dimensions, time_grain="P1D", stacked=False
+    - **bubble**: x_metric, y_metric, size_metric, series_column; optional: entity_column, max_bubble_size=25
+    - **funnel**: metric, dimension; optional: sort_by_metric=True
+    - **gauge_chart** (gauge): metric; optional: min_val=0, max_val=100
+    - **treemap_v2** (treemap): metric, dimensions
+    - **histogram**: column; optional: dimensions, num_bins=10, normalized=False
+    - **box_plot**: metrics, dimensions; optional: whisker_options="Tukey"
+    - **heatmap**: metric, x_column, y_column; optional: linear_color_scheme, normalize_across, show_values=False
+
+    Common parameters:
+        chart_type: The visualization type (see list above)
+        title: Chart title
+        dataset_id: ID of the dataset to use
+        time_range: Time filter (default "No filter"). For time-series charts use e.g. "Last 30 days"
+
+    Metric format: Use SQL syntax like "COUNT(*)", "SUM(column)", "AVG(column)"
+    or a pre-defined metric name from the dataset.
+
+    Returns the created chart information with ID and URL.
+    """
+    ctx = get_tool_context()
+
+    # Collect only the non-None kwargs to pass through
+    kwargs: dict[str, Any] = {}
+    _optional_params = {
+        "metrics": metrics,
+        "metric": metric,
+        "dimensions": dimensions,
+        "dimension": dimension,
+        "columns": columns,
+        "time_column": time_column,
+        "time_grain": time_grain,
+        "x_metric": x_metric,
+        "y_metric": y_metric,
+        "size_metric": size_metric,
+        "series_column": series_column,
+        "entity_column": entity_column,
+        "max_bubble_size": max_bubble_size,
+        "column": column,
+        "num_bins": num_bins,
+        "normalized": normalized,
+        "min_val": min_val,
+        "max_val": max_val,
+        "whisker_options": whisker_options,
+        "stacked": stacked,
+        "sort_by_metric": sort_by_metric,
+        "x_column": x_column,
+        "y_column": y_column,
+        "linear_color_scheme": linear_color_scheme,
+        "normalize_across": normalize_across,
+        "show_values": show_values,
+        "row_limit": row_limit,
+    }
+    for key, value in _optional_params.items():
+        if value is not None:
+            kwargs[key] = value
+
+    result = await chart_ops.create_chart(
+        ctx.charts,
+        chart_type=chart_type,
+        title=title,
+        dataset_id=dataset_id,
+        time_range=time_range,
+        **kwargs,
+    )
+    ctx.session.add_asset("chart", result["id"], result["title"])
+    return result
+
+
+# =============================================================================
 # Tool Registry
 # =============================================================================
 
@@ -1214,27 +1387,13 @@ ALL_TOOLS = [
     list_existing_datasets,
     execute_sql,
     profile_dataset,
+    suggest_chart_type,
     # Datasets
     find_or_create_dataset,
-    # Charts — original types
+    # Charts
     list_all_charts,
     get_chart,
-    create_bar_chart,
-    create_line_chart,
-    create_pie_chart,
-    create_table_chart,
-    create_metric_chart,
-    # Charts — new types
-    create_area_chart,
-    create_big_number_trendline_chart,
-    create_timeseries_bar_chart,
-    create_bubble_chart,
-    create_funnel_chart,
-    create_gauge_chart,
-    create_treemap_chart,
-    create_histogram_chart,
-    create_box_plot_chart,
-    create_heatmap_chart,
+    create_chart,
     update_chart,
     delete_chart,
     # Dashboards

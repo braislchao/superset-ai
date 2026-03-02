@@ -428,6 +428,327 @@ class TestDiscoveryOps:
 
 
 # ===========================================================================
+# Chart type suggestion (pure function — no mocks needed)
+# ===========================================================================
+
+
+class TestSuggestChartType:
+    """Tests for discovery_ops.suggest_chart_type."""
+
+    def test_time_and_numeric_columns(self):
+        """Recommends line/area/big_number when time + numeric cols exist."""
+        columns = [
+            {
+                "name": "ts",
+                "type": "TIMESTAMP",
+                "is_time": True,
+                "cardinality": 365,
+                "null_count": 0,
+            },
+            {
+                "name": "revenue",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns, row_count=1000)
+
+        types = [r["chart_type"] for r in result]
+        assert "line" in types
+        assert "area" in types
+        assert "big_number" in types
+        # Should suggest histogram for the numeric col
+        assert "histogram" in types
+        # Table always present
+        assert "table" in types
+
+    def test_numeric_and_categorical_columns(self):
+        """Recommends bar/pie/treemap when numeric + categorical cols exist."""
+        columns = [
+            {
+                "name": "amount",
+                "type": "INTEGER",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 0,
+            },
+            {
+                "name": "region",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 5,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+            {
+                "name": "product",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 200,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns, row_count=500)
+
+        types = [r["chart_type"] for r in result]
+        assert "dist_bar" in types
+        assert "pie" in types  # low-card region
+        assert "treemap_v2" in types  # high-card product
+
+    def test_low_cardinality_pie(self):
+        """Pie chart is suggested for columns with cardinality <= 7."""
+        columns = [
+            {
+                "name": "value",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "status",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 3,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns)
+
+        pie_recs = [r for r in result if r["chart_type"] == "pie"]
+        assert len(pie_recs) == 1
+        assert pie_recs[0]["suggested_params"]["dimension"] == "status"
+
+    def test_two_categoricals_heatmap(self):
+        """Heatmap is suggested when two categorical + one numeric column."""
+        columns = [
+            {
+                "name": "value",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "weekday",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 7,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+            {
+                "name": "hour",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 24,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns)
+
+        types = [r["chart_type"] for r in result]
+        assert "heatmap" in types
+        heatmap = [r for r in result if r["chart_type"] == "heatmap"][0]
+        assert heatmap["suggested_params"]["x_column"] == "weekday"
+        assert heatmap["suggested_params"]["y_column"] == "hour"
+
+    def test_three_numerics_bubble(self):
+        """Bubble chart suggested when 3+ numeric + categorical columns."""
+        columns = [
+            {
+                "name": "x",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "y",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "size",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "group",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 10,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns)
+
+        types = [r["chart_type"] for r in result]
+        assert "bubble" in types
+        bubble = [r for r in result if r["chart_type"] == "bubble"][0]
+        assert bubble["suggested_params"]["series_column"] == "group"
+
+    def test_empty_columns(self):
+        """No crash with empty column list; always returns table."""
+        result = discovery_ops.suggest_chart_type([], row_count=0)
+
+        assert len(result) == 1
+        assert result[0]["chart_type"] == "table"
+
+    def test_only_categorical_columns(self):
+        """Only categorical columns — only table suggested."""
+        columns = [
+            {
+                "name": "name",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+            {
+                "name": "city",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns)
+
+        types = [r["chart_type"] for r in result]
+        # No numeric → no bar/pie/line etc.
+        assert "dist_bar" not in types
+        assert "line" not in types
+        assert "table" in types
+
+    def test_no_duplicate_chart_types(self):
+        """Each chart_type appears at most once in results."""
+        columns = [
+            {
+                "name": "ts",
+                "type": "TIMESTAMP",
+                "is_time": True,
+                "cardinality": 365,
+                "null_count": 0,
+            },
+            {
+                "name": "amount",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "price",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 80,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "count",
+                "type": "INTEGER",
+                "is_time": False,
+                "cardinality": 50,
+                "null_count": 0,
+                "type_generic": 0,
+            },
+            {
+                "name": "region",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 5,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+            {
+                "name": "product",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 200,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns, row_count=10000)
+
+        types = [r["chart_type"] for r in result]
+        assert len(types) == len(set(types)), f"Duplicate chart types: {types}"
+
+    def test_numeric_by_type_string_fallback(self):
+        """Columns without type_generic are classified by type string."""
+        columns = [
+            {
+                "name": "val",
+                "type": "DECIMAL(10,2)",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns)
+
+        types = [r["chart_type"] for r in result]
+        assert "histogram" in types
+        assert "big_number_total" in types
+
+    def test_timeseries_bar_with_time_and_categorical(self):
+        """echarts_timeseries_bar suggested when time + numeric + categorical."""
+        columns = [
+            {
+                "name": "ts",
+                "type": "TIMESTAMP",
+                "is_time": True,
+                "cardinality": 365,
+                "null_count": 0,
+            },
+            {
+                "name": "sales",
+                "type": "FLOAT",
+                "is_time": False,
+                "cardinality": 100,
+                "null_count": 0,
+                "type_generic": 1,
+            },
+            {
+                "name": "region",
+                "type": "VARCHAR",
+                "is_time": False,
+                "cardinality": 5,
+                "null_count": 0,
+                "type_generic": 3,
+            },
+        ]
+        result = discovery_ops.suggest_chart_type(columns, row_count=1000)
+
+        types = [r["chart_type"] for r in result]
+        assert "echarts_timeseries_bar" in types
+        tsb = [r for r in result if r["chart_type"] == "echarts_timeseries_bar"][0]
+        assert tsb["suggested_params"]["dimensions"] == ["region"]
+
+
+# ===========================================================================
 # Dataset operations
 # ===========================================================================
 
@@ -484,6 +805,102 @@ class TestDatasetOps:
 # ===========================================================================
 # Chart operations
 # ===========================================================================
+
+
+class TestUnifiedCreateChart:
+    """Tests for the unified create_chart dispatcher in operations/charts.py."""
+
+    async def test_create_chart_dispatches_bar(self):
+        """create_chart with 'dist_bar' dispatches to create_chart_by_type."""
+        chart_svc = AsyncMock()
+        chart_svc.create_chart_by_type.return_value = _make_chart(
+            id=50,
+            slice_name="Bar Chart",
+            viz_type="dist_bar",
+        )
+
+        result = await chart_ops.create_chart(
+            chart_svc,
+            chart_type="dist_bar",
+            title="Bar Chart",
+            dataset_id=10,
+            dimensions=["region"],
+            metrics=["SUM(revenue)"],
+            time_range="No filter",
+        )
+
+        assert result["id"] == 50
+        assert result["type"] == "dist_bar"
+        # 'dimensions' should be translated to 'groupby'
+        chart_svc.create_chart_by_type.assert_called_once_with(
+            chart_type="dist_bar",
+            title="Bar Chart",
+            datasource_id=10,
+            groupby=["region"],
+            metrics=["SUM(revenue)"],
+            time_range="No filter",
+        )
+
+    async def test_create_chart_dispatches_pie(self):
+        """create_chart with 'pie' translates singular 'dimension' to 'groupby'."""
+        chart_svc = AsyncMock()
+        chart_svc.create_chart_by_type.return_value = _make_chart(
+            id=51,
+            slice_name="Pie Chart",
+            viz_type="pie",
+        )
+
+        result = await chart_ops.create_chart(
+            chart_svc,
+            chart_type="pie",
+            title="Pie Chart",
+            dataset_id=10,
+            dimension="company",
+            metric="SUM(revenue)",
+            time_range="No filter",
+        )
+
+        assert result["id"] == 51
+        # 'dimension' should be translated to 'groupby'
+        chart_svc.create_chart_by_type.assert_called_once_with(
+            chart_type="pie",
+            title="Pie Chart",
+            datasource_id=10,
+            groupby="company",
+            metric="SUM(revenue)",
+            time_range="No filter",
+        )
+
+    async def test_create_chart_passes_through_non_renamed_params(self):
+        """create_chart passes unknown params through untouched."""
+        chart_svc = AsyncMock()
+        chart_svc.create_chart_by_type.return_value = _make_chart(
+            id=52,
+            slice_name="Heatmap",
+            viz_type="heatmap",
+        )
+
+        result = await chart_ops.create_chart(
+            chart_svc,
+            chart_type="heatmap",
+            title="Heatmap",
+            dataset_id=10,
+            metric="AVG(temp)",
+            x_column="day",
+            y_column="hour",
+            time_range="No filter",
+        )
+
+        assert result["id"] == 52
+        chart_svc.create_chart_by_type.assert_called_once_with(
+            chart_type="heatmap",
+            title="Heatmap",
+            datasource_id=10,
+            metric="AVG(temp)",
+            x_column="day",
+            y_column="hour",
+            time_range="No filter",
+        )
 
 
 class TestChartOps:

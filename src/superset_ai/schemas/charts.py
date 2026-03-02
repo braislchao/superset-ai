@@ -114,7 +114,7 @@ class ChartParams(BaseSchema):
     Note: Structure varies significantly by viz_type.
     """
 
-    viz_type: str
+    viz_type: ChartType
     datasource: str  # Format: "{id}__table"
 
     # Metrics and dimensions
@@ -222,7 +222,7 @@ class ChartCreate(BaseSchema):
     """
 
     slice_name: str = Field(..., description="Chart title")
-    viz_type: str = Field(..., description="Visualization type")
+    viz_type: ChartType = Field(..., description="Visualization type")
     datasource_id: int = Field(..., description="Dataset ID")
     datasource_type: str = Field(default="table", description="Datasource type")
     params: str = Field(..., description="JSON-encoded visualization parameters")
@@ -250,7 +250,7 @@ class ChartUpdate(BaseSchema):
     """
 
     slice_name: str | None = None
-    viz_type: str | None = None
+    viz_type: ChartType | None = None
     params: str | None = None
     query_context: str | None = None
     description: str | None = None

@@ -12,34 +12,37 @@ Always follow this workflow before creating charts:
 1. **Discover** — `list_databases` → `list_tables` → `list_existing_datasets`
 2. **Profile** — `profile_dataset` to understand row count, column cardinality, \
 null counts, and sample values
-3. **Validate** — `execute_sql` to check assumptions (column names, value \
+3. **Suggest** — `suggest_chart_type` to get data-driven chart recommendations \
+based on column profiles (types, cardinality, nulls)
+4. **Validate** — `execute_sql` to check assumptions (column names, value \
 distributions, date ranges)
-4. **Build** — choose the right chart type based on the data profile, then \
+5. **Build** — choose the right chart type based on the suggestions, then \
 create charts and dashboards
 
 Never create charts without first understanding the data.
 
 ## Chart Type Selection Guide
 
-Choose chart types based on the data and the user's intent:
+Choose chart types based on the data and the user's intent.
+Use `create_chart(chart_type=..., ...)` for all chart creation.
 
-| Data pattern | Recommended chart | Tool |
+| Data pattern | Recommended chart | chart_type |
 |---|---|---|
-| Category comparison | Bar chart | `create_bar_chart` (viz: dist_bar) |
-| Trend over time | Line chart | `create_line_chart` (viz: line) |
-| Trend over time (filled) | Area chart | `create_area_chart` (viz: area) |
-| Time-axis bars | Timeseries bar | `create_timeseries_bar_chart` (viz: echarts_timeseries_bar) |
-| Part-of-whole (≤7 categories) | Pie chart | `create_pie_chart` (viz: pie) |
-| Part-of-whole (hierarchical) | Treemap | `create_treemap_chart` (viz: treemap_v2) |
-| Single KPI value | Big number | `create_metric_chart` (viz: big_number_total) |
-| KPI with trendline | Big number trend | `create_big_number_trendline_chart` (viz: big_number) |
-| Single value on a scale | Gauge | `create_gauge_chart` (viz: gauge_chart) |
-| Distribution of values | Histogram | `create_histogram_chart` (viz: histogram) |
-| Statistical spread | Box plot | `create_box_plot_chart` (viz: box_plot) |
-| 2-variable correlation | Bubble chart | `create_bubble_chart` (viz: bubble) |
-| 2D dense comparison | Heatmap | `create_heatmap_chart` (viz: heatmap) |
-| Sequential stages | Funnel | `create_funnel_chart` (viz: funnel) |
-| Tabular detail / raw rows | Table | `create_table_chart` (viz: table) |
+| Category comparison | Bar chart | `dist_bar` |
+| Trend over time | Line chart | `line` |
+| Trend over time (filled) | Area chart | `area` |
+| Time-axis bars | Timeseries bar | `echarts_timeseries_bar` |
+| Part-of-whole (≤7 categories) | Pie chart | `pie` |
+| Part-of-whole (hierarchical) | Treemap | `treemap_v2` |
+| Single KPI value | Big number | `big_number_total` |
+| KPI with trendline | Big number trend | `big_number` |
+| Single value on a scale | Gauge | `gauge_chart` |
+| Distribution of values | Histogram | `histogram` |
+| Statistical spread | Box plot | `box_plot` |
+| 2-variable correlation | Bubble chart | `bubble` |
+| 2D dense comparison | Heatmap | `heatmap` |
+| Sequential stages | Funnel | `funnel` |
+| Tabular detail / raw rows | Table | `table` |
 
 Decision rules:
 - Use **pie** only when cardinality ≤ 7; otherwise prefer **bar** or **treemap**
@@ -98,6 +101,8 @@ Charts with time filtering accept these `time_range` values:
 ## Other Available Tools
 
 - **Dataset management**: `find_or_create_dataset`, `list_existing_datasets`
+- **Chart suggestions**: `suggest_chart_type` — analyzes a dataset and \
+recommends chart types with example parameters
 - **Chart management**: `list_all_charts`, `get_chart`, `update_chart`, `delete_chart`
 - **Dashboard management**: `list_all_dashboards`, `get_dashboard`, \
 `create_dashboard`, `create_tabbed_dashboard`, `add_chart_to_dashboard`, \

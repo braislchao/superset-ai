@@ -5,7 +5,46 @@ from __future__ import annotations
 from typing import Any
 
 from superset_ai.api.charts import ChartService
-from superset_ai.schemas.charts import ChartUpdate
+from superset_ai.schemas.charts import ChartType, ChartUpdate
+
+# ---- Parameter mapping for the unified create_chart dispatcher ----
+# Maps (tool-layer param name) → (API-layer param name) for parameters
+# that are renamed between layers.
+_PARAM_RENAMES: dict[str, str] = {
+    "dimensions": "groupby",
+    "dimension": "groupby",
+    "num_bins": "num_bins",  # identity — kept for clarity
+}
+
+
+async def create_chart(
+    chart_svc: ChartService,
+    chart_type: ChartType,
+    title: str,
+    dataset_id: int,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Unified chart creation — delegates to ``ChartService.create_chart_by_type``.
+
+    This is the single entry-point used by the agent tool layer.
+    Tool-facing parameter names (e.g. ``dimensions``) are translated to
+    API-facing names (e.g. ``groupby``) automatically.
+
+    Returns:
+        Dict with ``id``, ``title``, ``type``, and ``url``.
+    """
+    # Translate parameter names from tool convention to API convention
+    translated: dict[str, Any] = {}
+    for key, value in kwargs.items():
+        translated[_PARAM_RENAMES.get(key, key)] = value
+
+    chart = await chart_svc.create_chart_by_type(
+        chart_type=chart_type,
+        title=title,
+        datasource_id=dataset_id,
+        **translated,
+    )
+    return _chart_result(chart)
 
 
 async def create_bar_chart(
@@ -106,7 +145,7 @@ async def create_table_chart(
     return _chart_result(chart)
 
 
-async def create_metric_chart(
+async def create_big_number_total_chart(
     chart_svc: ChartService,
     title: str,
     dataset_id: int,
@@ -118,7 +157,7 @@ async def create_metric_chart(
     Returns:
         Dict with ``id``, ``title``, ``type``, and ``url``.
     """
-    chart = await chart_svc.create_big_number(
+    chart = await chart_svc.create_big_number_total(
         title=title,
         datasource_id=dataset_id,
         metric=metric,

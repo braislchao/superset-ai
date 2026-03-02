@@ -9,6 +9,7 @@ from superset_ai.schemas.charts import (
     ChartDetail,
     ChartInfo,
     ChartParams,
+    ChartType,
     ChartUpdate,
     build_adhoc_metric,
     build_area_chart_params,
@@ -178,6 +179,66 @@ class ChartService:
         await self.client.put(f"/chart/{chart_id}", json={"dashboards": all_dashboard_ids})
 
         return await self.get_chart(chart_id)
+
+    # =========================================================================
+    # Unified chart creation dispatcher
+    # =========================================================================
+
+    async def create_chart_by_type(
+        self,
+        *,
+        chart_type: ChartType,
+        title: str,
+        datasource_id: int,
+        description: str | None = None,
+        **kwargs: Any,
+    ) -> ChartDetail:
+        """Create a chart of any supported type.
+
+        This is a single entry-point that dispatches to the appropriate
+        type-specific builder.  All chart-type-specific parameters are
+        passed via ``**kwargs``; see the individual ``create_*`` methods
+        for the accepted keyword arguments for each chart type.
+
+        Args:
+            chart_type: One of the supported ``ChartType`` values.
+            title: Chart title.
+            datasource_id: Dataset ID.
+            description: Optional chart description.
+            **kwargs: Chart-type-specific parameters.
+
+        Raises:
+            ValueError: If ``chart_type`` is not supported.
+        """
+        dispatch: dict[str, Any] = {
+            "dist_bar": self.create_bar_chart,
+            "line": self.create_line_chart,
+            "pie": self.create_pie_chart,
+            "table": self.create_table,
+            "big_number_total": self.create_big_number_total,
+            "area": self.create_area_chart,
+            "big_number": self.create_big_number_with_trendline,
+            "echarts_timeseries_bar": self.create_timeseries_bar_chart,
+            "bubble": self.create_bubble_chart,
+            "funnel": self.create_funnel_chart,
+            "gauge_chart": self.create_gauge_chart,
+            "treemap_v2": self.create_treemap,
+            "histogram": self.create_histogram,
+            "box_plot": self.create_box_plot,
+            "heatmap": self.create_heatmap,
+        }
+        fn = dispatch.get(chart_type)
+        if fn is None:
+            raise ValueError(
+                f"Unsupported chart type: {chart_type!r}. "
+                f"Supported types: {', '.join(sorted(dispatch))}"
+            )
+        return await fn(
+            title=title,
+            datasource_id=datasource_id,
+            description=description,
+            **kwargs,
+        )
 
     # =========================================================================
     # High-level chart creation methods
@@ -350,7 +411,7 @@ class ChartService:
 
         return await self.create_chart(spec)
 
-    async def create_big_number(
+    async def create_big_number_total(
         self,
         *,
         title: str,
@@ -833,7 +894,7 @@ class ChartService:
         self,
         *,
         title: str,
-        viz_type: str,
+        viz_type: ChartType,
         datasource_id: int,
         params: ChartParams,
         description: str | None = None,

@@ -16,6 +16,7 @@ from superset_ai.agent.tools import (
     _tool_context_var,
     # Chart creation tools
     create_bar_chart,
+    create_chart,
     create_dashboard,
     create_line_chart,
     create_pie_chart,
@@ -38,6 +39,7 @@ from superset_ai.agent.tools import (
     list_tables,
     profile_dataset,
     set_tool_context,
+    suggest_chart_type,
     update_chart,
 )
 
@@ -98,8 +100,8 @@ class TestAllToolsList:
     """Tests for the ALL_TOOLS registry."""
 
     def test_expected_count(self):
-        """ALL_TOOLS should contain exactly 39 tools."""
-        assert len(ALL_TOOLS) == 39
+        """ALL_TOOLS should contain exactly 26 tools."""
+        assert len(ALL_TOOLS) == 26
 
     def test_all_entries_are_callable(self):
         """Every entry in ALL_TOOLS must be callable."""
@@ -275,6 +277,72 @@ class TestDiscoveryToolWiring:
         mock_op.assert_awaited_once_with(ctx.databases, ctx.datasets, 10, 3)
         assert result == fake_result
 
+    async def test_suggest_chart_type_delegates(self):
+        """suggest_chart_type profiles dataset and returns recommendations."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_profile = {
+            "dataset_id": 10,
+            "table_name": "orders",
+            "row_count": 100,
+            "columns": [
+                {
+                    "name": "ts",
+                    "type": "TIMESTAMP",
+                    "is_time": True,
+                    "cardinality": 90,
+                    "null_count": 0,
+                },
+                {
+                    "name": "amount",
+                    "type": "FLOAT",
+                    "is_time": False,
+                    "cardinality": 50,
+                    "null_count": 0,
+                    "type_generic": 1,
+                },
+            ],
+        }
+
+        with patch(
+            f"{OPS_BASE}.discovery_ops.profile_dataset",
+            new_callable=AsyncMock,
+            return_value=fake_profile,
+        ) as mock_profile:
+            result = await suggest_chart_type.ainvoke({"dataset_id": 10, "sample_size": 3})
+
+        mock_profile.assert_awaited_once_with(ctx.databases, ctx.datasets, 10, 3)
+        # Should have the profile fields plus recommendations
+        assert result["dataset_id"] == 10
+        assert result["table_name"] == "orders"
+        assert result["row_count"] == 100
+        assert "recommendations" in result
+        # Time + numeric → should include line
+        types = [r["chart_type"] for r in result["recommendations"]]
+        assert "line" in types
+
+    async def test_suggest_chart_type_error_passthrough(self):
+        """suggest_chart_type passes through profile errors."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_error = {
+            "dataset_id": 5,
+            "table_name": "orphan",
+            "error": "Dataset has no associated database_id",
+        }
+
+        with patch(
+            f"{OPS_BASE}.discovery_ops.profile_dataset",
+            new_callable=AsyncMock,
+            return_value=fake_error,
+        ):
+            result = await suggest_chart_type.ainvoke({"dataset_id": 5})
+
+        assert "error" in result
+        assert "recommendations" not in result
+
 
 class TestDatasetToolWiring:
     """Wiring tests for dataset tools."""
@@ -415,6 +483,209 @@ class TestChartToolWiring:
         )
         assert result == fake_result
         ctx.session.add_asset.assert_called_once_with("chart", 102, "Market Share")
+
+
+class TestUnifiedCreateChartTool:
+    """Wiring tests for the unified create_chart tool."""
+
+    async def test_create_chart_bar_delegates(self):
+        """create_chart with chart_type='dist_bar' delegates to chart_ops.create_chart."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "id": 200,
+            "title": "Revenue by Region",
+            "type": "dist_bar",
+            "url": "/explore/?slice_id=200",
+        }
+
+        with patch(
+            f"{OPS_BASE}.chart_ops.create_chart",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await create_chart.ainvoke(
+                {
+                    "chart_type": "dist_bar",
+                    "title": "Revenue by Region",
+                    "dataset_id": 5,
+                    "metrics": ["SUM(revenue)"],
+                    "dimensions": ["region"],
+                }
+            )
+
+        mock_op.assert_awaited_once_with(
+            ctx.charts,
+            chart_type="dist_bar",
+            title="Revenue by Region",
+            dataset_id=5,
+            time_range="No filter",
+            metrics=["SUM(revenue)"],
+            dimensions=["region"],
+        )
+        assert result == fake_result
+        ctx.session.add_asset.assert_called_once_with("chart", 200, "Revenue by Region")
+
+    async def test_create_chart_line_delegates(self):
+        """create_chart with chart_type='line' delegates with time params."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "id": 201,
+            "title": "Sales Trend",
+            "type": "line",
+            "url": "/explore/?slice_id=201",
+        }
+
+        with patch(
+            f"{OPS_BASE}.chart_ops.create_chart",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await create_chart.ainvoke(
+                {
+                    "chart_type": "line",
+                    "title": "Sales Trend",
+                    "dataset_id": 5,
+                    "metrics": ["SUM(amount)"],
+                    "time_column": "order_date",
+                    "time_range": "Last 30 days",
+                }
+            )
+
+        mock_op.assert_awaited_once_with(
+            ctx.charts,
+            chart_type="line",
+            title="Sales Trend",
+            dataset_id=5,
+            time_range="Last 30 days",
+            metrics=["SUM(amount)"],
+            time_column="order_date",
+        )
+        assert result == fake_result
+        ctx.session.add_asset.assert_called_once_with("chart", 201, "Sales Trend")
+
+    async def test_create_chart_pie_delegates(self):
+        """create_chart with chart_type='pie' delegates with singular metric/dimension."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "id": 202,
+            "title": "Market Share",
+            "type": "pie",
+            "url": "/explore/?slice_id=202",
+        }
+
+        with patch(
+            f"{OPS_BASE}.chart_ops.create_chart",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await create_chart.ainvoke(
+                {
+                    "chart_type": "pie",
+                    "title": "Market Share",
+                    "dataset_id": 5,
+                    "metric": "SUM(revenue)",
+                    "dimension": "company",
+                }
+            )
+
+        mock_op.assert_awaited_once_with(
+            ctx.charts,
+            chart_type="pie",
+            title="Market Share",
+            dataset_id=5,
+            time_range="No filter",
+            metric="SUM(revenue)",
+            dimension="company",
+        )
+        assert result == fake_result
+        ctx.session.add_asset.assert_called_once_with("chart", 202, "Market Share")
+
+    async def test_create_chart_omits_none_kwargs(self):
+        """create_chart does not pass None-valued optional params."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "id": 203,
+            "title": "KPI",
+            "type": "big_number_total",
+            "url": "/explore/?slice_id=203",
+        }
+
+        with patch(
+            f"{OPS_BASE}.chart_ops.create_chart",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await create_chart.ainvoke(
+                {
+                    "chart_type": "big_number_total",
+                    "title": "KPI",
+                    "dataset_id": 5,
+                    "metric": "COUNT(*)",
+                }
+            )
+
+        # Should NOT include dimensions, time_column, etc. — only non-None params
+        mock_op.assert_awaited_once_with(
+            ctx.charts,
+            chart_type="big_number_total",
+            title="KPI",
+            dataset_id=5,
+            time_range="No filter",
+            metric="COUNT(*)",
+        )
+        assert result == fake_result
+
+    async def test_create_chart_bubble_passes_all_params(self):
+        """create_chart with chart_type='bubble' passes all bubble-specific params."""
+        ctx = make_mock_context()
+        set_tool_context(ctx)
+
+        fake_result = {
+            "id": 204,
+            "title": "Bubble",
+            "type": "bubble",
+            "url": "/explore/?slice_id=204",
+        }
+
+        with patch(
+            f"{OPS_BASE}.chart_ops.create_chart",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_op:
+            result = await create_chart.ainvoke(
+                {
+                    "chart_type": "bubble",
+                    "title": "Bubble",
+                    "dataset_id": 5,
+                    "x_metric": "SUM(x)",
+                    "y_metric": "SUM(y)",
+                    "size_metric": "COUNT(*)",
+                    "series_column": "category",
+                    "max_bubble_size": 50,
+                }
+            )
+
+        mock_op.assert_awaited_once_with(
+            ctx.charts,
+            chart_type="bubble",
+            title="Bubble",
+            dataset_id=5,
+            time_range="No filter",
+            x_metric="SUM(x)",
+            y_metric="SUM(y)",
+            size_metric="COUNT(*)",
+            series_column="category",
+            max_bubble_size=50,
+        )
+        assert result == fake_result
 
 
 class TestChartManagementToolWiring:

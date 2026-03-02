@@ -304,3 +304,324 @@ async def profile_dataset(
         "row_count": row_count,
         "columns": column_profiles,
     }
+
+
+# ---------------------------------------------------------------------------
+# Chart type suggestion
+# ---------------------------------------------------------------------------
+
+
+def suggest_chart_type(
+    columns: list[dict[str, Any]],
+    row_count: int = 0,
+) -> list[dict[str, Any]]:
+    """Suggest chart types based on column profiles.
+
+    Analyzes column types, cardinality, and null counts to recommend
+    appropriate chart types ordered by relevance.
+
+    Args:
+        columns: Column profiles as returned by ``profile_dataset``.
+            Each dict has ``name``, ``type``, ``is_time``, ``cardinality``,
+            and ``null_count``.
+        row_count: Total rows in the dataset.
+
+    Returns:
+        List of recommendation dicts, each with ``chart_type``,
+        ``reason``, and ``suggested_params`` (example parameter hints).
+    """
+    time_cols = [c for c in columns if c.get("is_time")]
+    numeric_cols = _numeric_columns(columns)
+    categorical_cols = _categorical_columns(columns)
+
+    # Track low- and high-cardinality categoricals
+    low_card_cats = [c for c in categorical_cols if (c.get("cardinality") or 0) <= 7]
+    high_card_cats = [c for c in categorical_cols if (c.get("cardinality") or 0) > 7]
+
+    recommendations: list[dict[str, Any]] = []
+
+    # ---- Time-series charts ------------------------------------------------
+    if time_cols and numeric_cols:
+        tc = time_cols[0]["name"]
+        m = _metric_expr(numeric_cols[0])
+
+        recommendations.append(
+            {
+                "chart_type": "line",
+                "reason": (
+                    f"Time column '{tc}' + numeric column(s) available — "
+                    "ideal for showing trends over time."
+                ),
+                "suggested_params": {
+                    "metrics": [m],
+                    "time_column": tc,
+                },
+            }
+        )
+
+        recommendations.append(
+            {
+                "chart_type": "area",
+                "reason": (
+                    f"Time column '{tc}' + numeric columns — area chart shows cumulative trends."
+                ),
+                "suggested_params": {
+                    "metrics": [m],
+                    "time_column": tc,
+                    "stacked": True,
+                },
+            }
+        )
+
+        if categorical_cols:
+            recommendations.append(
+                {
+                    "chart_type": "echarts_timeseries_bar",
+                    "reason": (
+                        f"Time column '{tc}' + numeric + categorical columns — "
+                        "bar chart over time axis."
+                    ),
+                    "suggested_params": {
+                        "metrics": [m],
+                        "time_column": tc,
+                        "dimensions": [categorical_cols[0]["name"]],
+                    },
+                }
+            )
+
+        recommendations.append(
+            {
+                "chart_type": "big_number",
+                "reason": (f"Single KPI with trendline using time column '{tc}'."),
+                "suggested_params": {
+                    "metric": m,
+                    "time_column": tc,
+                },
+            }
+        )
+
+    # ---- Category-based charts ---------------------------------------------
+    if numeric_cols and categorical_cols:
+        m = _metric_expr(numeric_cols[0])
+        cat = categorical_cols[0]["name"]
+
+        recommendations.append(
+            {
+                "chart_type": "dist_bar",
+                "reason": (
+                    f"Numeric + categorical columns — bar chart compares '{m}' across '{cat}'."
+                ),
+                "suggested_params": {
+                    "metrics": [m],
+                    "dimensions": [cat],
+                },
+            }
+        )
+
+        if low_card_cats:
+            lc = low_card_cats[0]["name"]
+            card = low_card_cats[0].get("cardinality", "?")
+            recommendations.append(
+                {
+                    "chart_type": "pie",
+                    "reason": (
+                        f"Low-cardinality column '{lc}' ({card} values) — "
+                        "good for part-of-whole comparison."
+                    ),
+                    "suggested_params": {
+                        "metric": m,
+                        "dimension": lc,
+                    },
+                }
+            )
+
+        if high_card_cats:
+            hc = high_card_cats[0]["name"]
+            card = high_card_cats[0].get("cardinality", "?")
+            recommendations.append(
+                {
+                    "chart_type": "treemap_v2",
+                    "reason": (
+                        f"High-cardinality column '{hc}' ({card} values) — "
+                        "treemap handles many categories better than pie."
+                    ),
+                    "suggested_params": {
+                        "metric": m,
+                        "dimensions": [hc],
+                    },
+                }
+            )
+
+    # ---- Two-categorical + numeric → heatmap --------------------------------
+    if len(categorical_cols) >= 2 and numeric_cols:
+        m = _metric_expr(numeric_cols[0])
+        recommendations.append(
+            {
+                "chart_type": "heatmap",
+                "reason": (
+                    f"Two categorical columns + numeric — heatmap shows "
+                    f"'{m}' across '{categorical_cols[0]['name']}' × "
+                    f"'{categorical_cols[1]['name']}'."
+                ),
+                "suggested_params": {
+                    "metric": m,
+                    "x_column": categorical_cols[0]["name"],
+                    "y_column": categorical_cols[1]["name"],
+                },
+            }
+        )
+
+    # ---- Three numeric → bubble ---------------------------------------------
+    if len(numeric_cols) >= 3 and categorical_cols:
+        recommendations.append(
+            {
+                "chart_type": "bubble",
+                "reason": ("3+ numeric columns — bubble chart encodes x, y, and size."),
+                "suggested_params": {
+                    "x_metric": _metric_expr(numeric_cols[0]),
+                    "y_metric": _metric_expr(numeric_cols[1]),
+                    "size_metric": _metric_expr(numeric_cols[2]),
+                    "series_column": categorical_cols[0]["name"],
+                },
+            }
+        )
+
+    # ---- Single numeric → histogram / gauge / big_number_total ---------------
+    if numeric_cols:
+        m = _metric_expr(numeric_cols[0])
+
+        recommendations.append(
+            {
+                "chart_type": "histogram",
+                "reason": (
+                    f"Numeric column '{numeric_cols[0]['name']}' — "
+                    "histogram shows value distribution."
+                ),
+                "suggested_params": {
+                    "column": numeric_cols[0]["name"],
+                },
+            }
+        )
+
+        recommendations.append(
+            {
+                "chart_type": "big_number_total",
+                "reason": "Single headline KPI metric.",
+                "suggested_params": {
+                    "metric": m,
+                },
+            }
+        )
+
+        recommendations.append(
+            {
+                "chart_type": "gauge_chart",
+                "reason": ("Single metric on a scale — good for KPIs with known min/max bounds."),
+                "suggested_params": {
+                    "metric": m,
+                    "min_val": 0,
+                    "max_val": 100,
+                },
+            }
+        )
+
+    # ---- Numeric + categorical → box plot ------------------------------------
+    if numeric_cols and categorical_cols:
+        recommendations.append(
+            {
+                "chart_type": "box_plot",
+                "reason": (
+                    f"Compare distribution of '{numeric_cols[0]['name']}' "
+                    f"across '{categorical_cols[0]['name']}' groups."
+                ),
+                "suggested_params": {
+                    "metrics": [_metric_expr(numeric_cols[0])],
+                    "dimensions": [categorical_cols[0]["name"]],
+                },
+            }
+        )
+
+    # ---- Table (always available) -------------------------------------------
+    all_names = [c["name"] for c in columns[:10]]  # cap at 10
+    recommendations.append(
+        {
+            "chart_type": "table",
+            "reason": "Raw data table — always applicable.",
+            "suggested_params": {
+                "columns": all_names,
+            },
+        }
+    )
+
+    # De-duplicate by chart_type, keeping first occurrence (highest priority)
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for rec in recommendations:
+        ct: str = rec["chart_type"]
+        if ct not in seen:
+            seen.add(ct)
+            unique.append(rec)
+
+    return unique
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for suggest_chart_type
+# ---------------------------------------------------------------------------
+
+
+def _numeric_columns(columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter columns that are numeric (INT or FLOAT generic types, or by type string)."""
+    numeric_type_strings = {
+        "INT",
+        "INTEGER",
+        "BIGINT",
+        "SMALLINT",
+        "FLOAT",
+        "DOUBLE",
+        "DECIMAL",
+        "NUMERIC",
+        "REAL",
+        "NUMBER",
+    }
+    result = []
+    for c in columns:
+        if c.get("is_time"):
+            continue
+        # type_generic 0=INT, 1=FLOAT in Superset
+        tg = c.get("type_generic")
+        if tg in (0, 1) or c.get("type", "").upper().split("(")[0].strip() in numeric_type_strings:
+            result.append(c)
+    return result
+
+
+def _categorical_columns(columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter columns that are categorical (non-numeric, non-time)."""
+    numeric_type_strings = {
+        "INT",
+        "INTEGER",
+        "BIGINT",
+        "SMALLINT",
+        "FLOAT",
+        "DOUBLE",
+        "DECIMAL",
+        "NUMERIC",
+        "REAL",
+        "NUMBER",
+    }
+    result = []
+    for c in columns:
+        if c.get("is_time"):
+            continue
+        tg = c.get("type_generic")
+        if tg in (0, 1):
+            continue
+        if c.get("type", "").upper().split("(")[0].strip() in numeric_type_strings:
+            continue
+        result.append(c)
+    return result
+
+
+def _metric_expr(col: dict[str, Any]) -> str:
+    """Build a default metric expression for a numeric column."""
+    return f"SUM({col['name']})"
